@@ -122,6 +122,24 @@ dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
 .chip{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:500}
 .item.fld{grid-template-columns:1fr auto}
 .x:disabled{opacity:.35;cursor:default}
+.daybar{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
+.daybar .iconbtn{width:46px;height:46px}
+.daypick{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;min-height:56px;padding:4px 8px;cursor:pointer;min-width:0}
+.daypick input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.dayname{font-family:var(--f-display);font-weight:700;font-size:22px;text-transform:uppercase;letter-spacing:.03em;line-height:1}
+.daydate{font-size:13px;color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.chip b{font-variant-numeric:tabular-nums}
+.tournee{display:flex;flex-direction:column;gap:8px}
+.tournee-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;border-bottom:2px solid var(--accent);padding-bottom:4px}
+.tournee-h h2{font-size:24px}
+.bl{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.bl-h{padding:10px 14px;background:var(--surface-2);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:2px 12px;align-items:baseline}
+.bl-h .cli{font-weight:600;font-size:16px;flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+.bl-h .meta{color:var(--muted);font-size:12.5px}
+.bl .item{border-bottom:1px solid var(--line)}
+.bl .item:last-child{border-bottom:0}
+.livinfo{display:flex;flex-wrap:wrap;gap:6px}
 .notfound{background:var(--bad-bg);color:var(--bad);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:4px}
 .notfound b{font-family:var(--f-display);font-size:22px;text-transform:uppercase}
 
@@ -168,7 +186,7 @@ dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
 
 /* Onglets */
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);
-  display:grid;grid-template-columns:repeat(2,1fr);
+  display:grid;grid-template-columns:repeat(3,1fr);
   padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px));padding-bottom:env(safe-area-inset-bottom,0px)}
 .tabs button{border:0;background:none;padding:8px 4px 10px;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:11.5px;font-weight:600;letter-spacing:.03em;position:relative}
 .tabs button svg{width:24px;height:24px}
@@ -293,6 +311,21 @@ dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
 
     <!-- Prêts -->
     <section class="view" id="v-pret" hidden></section>
+
+    <!-- Livraisons -->
+    <section class="view" id="v-liv" hidden>
+      <div class="panel">
+        <div class="daybar">
+          <button class="iconbtn" id="liv-prev" aria-label="Jour précédent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg></button>
+          <label class="daypick"><span class="dayname" id="liv-day"></span><span class="daydate" id="liv-date"></span><input type="date" id="liv-input" aria-label="Choisir la date de livraison"></label>
+          <button class="iconbtn" id="liv-next" aria-label="Jour suivant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg></button>
+        </div>
+        <div class="chips" id="liv-upcoming"></div>
+      </div>
+      <div id="liv-sum"></div>
+      <div class="chips" id="liv-tours"></div>
+      <div id="liv-list" class="view" style="gap:14px"></div>
+    </section>
   </main>
 
   <nav class="tabs" aria-label="Sections">
@@ -300,6 +333,8 @@ dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>Scanner</button>
     <button data-tab="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Recherche</button>
+    <button data-tab="liv">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 6h11v10H2zM13 9h4l3 3.5V16h-7"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/></svg>Livraison</button>
     <span id="inv-badge" hidden></span>
   </nav>
 
@@ -385,6 +420,24 @@ function freshness() {
   return { when, h, cls: h < 24 ? 'on' : h < 72 ? 'warn' : 'bad' };
 }
 const fmtDT = t => new Date(t).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+const XL0 = Date.UTC(1899, 11, 30);
+const daySerial = d => Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - XL0) / 86400000);
+const serialDate = n => { const u = new Date(XL0 + n * 86400000); return new Date(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate()); };
+const toSerial = v => typeof v === 'number' ? Math.floor(v) : v instanceof Date ? daySerial(v) : null;
+const JOURS = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+function dayLabel(n) {
+  const t = daySerial(new Date());
+  if (n === t) return 'Aujourd\u2019hui'; if (n === t + 1) return 'Demain'; if (n === t - 1) return 'Hier';
+  return JOURS[serialDate(n).getDay()];
+}
+const fmtSerial = (n, opt) => serialDate(n).toLocaleDateString('fr-FR', opt || { weekday: 'long', day: 'numeric', month: 'long' });
+function livInfo(i) {
+  const n = toSerial(V(i, 'Date_BL')), t = show(i, 'Tournee');
+  if (n == null && !t) return '';
+  let lbl = '';
+  if (n != null) { const td = daySerial(new Date()), rel = Math.abs(n - td) <= 1; lbl = 'Livraison ' + (rel ? dayLabel(n).toLowerCase() + ' ' + fmtSerial(n, { day: '2-digit', month: '2-digit' }) : fmtSerial(n, { weekday: 'short', day: '2-digit', month: '2-digit', year: '2-digit' })); }
+  return `<div class="livinfo">${lbl ? `<span class="pill info">${esc(lbl)}</span>` : ''}${t ? `<span class="pill info">Tournée ${esc(t)}</span>` : ''}</div>`;
+}
 const fmtEUR = v => typeof v === 'number' ? v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) : String(v ?? '');
 function show(i, name) {
   const v = V(i, name); if (isEmpty(v)) return '';
@@ -642,6 +695,7 @@ function ficheHTML(i) {
   let h = `<article class="fiche" style="--st:${ETAT_VAR[cls] || 'var(--muted)'}"><div class="fiche-head">
     <div class="fiche-top"><span class="ns">${esc(show(i,'No_Stock'))}</span>${etatPill(i)}${nat && nat !== 'STOCK' ? `<span class="pill bad">${esc(nat)}</span>` : ''}</div>
     <div class="modele">${esc(show(i,'Modele') || show(i,'Article') || 'Sans libellé')}</div>
+    ${livInfo(i)}
   </div>`;
   const key = settings.fields.map(k => { const v = fieldVal(i, k); return v ? `<dt>${esc(FIELD_LABELS[k] || k)}</dt><dd${monoKey(k) ? ' class="mono"' : ''}>${esc(v)}</dd>` : ''; }).join('');
   if (key) h += `<section class="sec key"><dl>${key}</dl></section>`;
@@ -974,7 +1028,7 @@ async function odRefresh({ force = false, interactive = false, quiet = false } =
     const p = parseWorkbook(new Uint8Array(buf));
     const data = { header: p.header, rows: p.rows, meta: { fileName: meta.name, fileDate: mod, savedAt: p.savedAt, loadedAt: Date.now(), demo: false, source: 'onedrive', odModified: mod } };
     D = buildIndex(data); await idb.set('data', { header: data.header, rows: data.rows, meta: data.meta });
-    afterData(); refreshFiche(); if (tab === 'search') runSearch();
+    afterData(); refreshFiche();
     if (!quiet) toast('Données actualisées : fichier du ' + fmtDT(freshness().when));
   } catch (e) { if (!quiet) toast('Actualisation impossible : ' + (e.message || e)); }
   finally { od.busy = false; setBusy(false); }
@@ -1084,6 +1138,55 @@ $('#btn-load').onclick = pickFile;
 $('#btn-demo').onclick = demoData;
 $('#file-xlsx').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) { setTab('scan'); render(); loadFile(f); } });
 
+/* ---------- Livraisons ---------- */
+let livDay = null, livTour = '';
+function livIndex() {
+  if (D.livCache) return D.livCache;
+  const c = D.col.Date_BL, byDay = new Map();
+  if (c != null) D.rows.forEach((r, i) => { const n = toSerial(r[c]); if (n == null) return; if (!byDay.has(n)) byDay.set(n, []); byDay.get(n).push(i); });
+  return D.livCache = byDay;
+}
+function renderLiv() {
+  const today = daySerial(new Date());
+  if (livDay == null) livDay = today + 1;
+  const byDay = livIndex();
+  $('#liv-day').textContent = dayLabel(livDay);
+  const rel = Math.abs(livDay - today) <= 1;
+  $('#liv-date').textContent = fmtSerial(livDay, rel ? { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' } : { day: 'numeric', month: 'long', year: 'numeric' });
+  const sd = serialDate(livDay);
+  $('#liv-input').value = `${sd.getFullYear()}-${String(sd.getMonth() + 1).padStart(2, '0')}-${String(sd.getDate()).padStart(2, '0')}`;
+  // prochains jours avec livraisons
+  const up = [...byDay.keys()].filter(n => n >= today).sort((a, b) => a - b).slice(0, 8);
+  $('#liv-upcoming').innerHTML = up.length ? up.map(n => `<button class="chip" data-day="${n}" aria-pressed="${n === livDay}">${esc(n === today ? 'Auj.' : n === today + 1 ? 'Demain' : fmtSerial(n, { weekday: 'short', day: '2-digit', month: '2-digit' }))} · <b>${new Set(byDay.get(n).map(i => show(i, 'No_BL') || 'i' + i)).size}</b></button>`).join('') : '<span class="hint">Aucune livraison à venir dans le fichier.</span>';
+  const items = (byDay.get(livDay) || []).slice();
+  // tournées du jour
+  const tours = new Map(); items.forEach(i => { const t = show(i, 'Tournee') || 'Sans tournée'; if (!tours.has(t)) tours.set(t, []); tours.get(t).push(i); });
+  const tourNames = [...tours.keys()].sort((a, b) => a.localeCompare(b, 'fr', { numeric: true }));
+  if (livTour && !tours.has(livTour)) livTour = '';
+  const nbBL = l => new Set(l.map(i => show(i, 'No_BL') || 'i' + i)).size;
+  $('#liv-tours').innerHTML = tourNames.length > 1 ? [`<button class="chip" data-tour="" aria-pressed="${!livTour}">Toutes · <b>${nbBL(items)}</b></button>`, ...tourNames.map(t => `<button class="chip" data-tour="${esc(t)}" aria-pressed="${livTour === t}">${esc(t)} · <b>${nbBL(tours.get(t))}</b></button>`)].join('') : '';
+  $('#liv-sum').innerHTML = items.length
+    ? `<p class="count">${nbBL(items)} livraison${nbBL(items) > 1 ? 's' : ''} · ${items.length} article${items.length > 1 ? 's' : ''} · ${tourNames.length} tournée${tourNames.length > 1 ? 's' : ''}</p>`
+    : `<div class="list"><div class="empty">Aucune livraison prévue ${rel ? dayLabel(livDay).toLowerCase() : 'le ' + fmtSerial(livDay)}.${up.length ? ' Touchez une date ci-dessus pour voir les prochaines.' : ''}</div></div>`;
+  // liste par tournée puis par BL (client)
+  const html = tourNames.filter(t => !livTour || t === livTour).map(t => {
+    const bls = new Map();
+    tours.get(t).forEach(i => { const k = show(i, 'No_BL') || 'i' + i; if (!bls.has(k)) bls.set(k, []); bls.get(k).push(i); });
+    const blHTML = [...bls.entries()].sort((a, b) => (show(a[1][0], 'Nom_Client') || '').localeCompare(show(b[1][0], 'Nom_Client') || '', 'fr')).map(([k, is]) => {
+      const f = is[0];
+      return `<div class="bl"><div class="bl-h"><span class="cli">${esc(show(f, 'Nom_Client') || 'Client non renseigné')}</span><span class="meta">${show(f, 'No_BL') ? 'BL <span class="mono">' + esc(show(f, 'No_BL')) + '</span> · ' : ''}${show(f, 'No_cde_client') ? 'Cde <span class="mono">' + esc(show(f, 'No_cde_client')) + '</span> · ' : ''}${esc(show(f, 'Magasin'))}</span></div>
+        ${is.map(i => `<button class="item" data-fiche="${i}"><span class="t">${esc(show(i, 'Modele') || show(i, 'Article'))}</span><span class="m"><span class="mono">${esc(show(i, 'No_Stock'))}</span>${show(i, 'Article') && show(i, 'Modele') ? ' · ' + esc(show(i, 'Article')) : ''}</span><span class="r">${show(i, 'Etat_Stock') !== 'Livraison en cours' ? etatPill(i) : ''}</span></button>`).join('')}</div>`;
+    }).join('');
+    return `<section class="tournee"><div class="tournee-h"><h2>${esc(t)}</h2><span class="count">${bls.size} livraison${bls.size > 1 ? 's' : ''} · ${tours.get(t).length} article${tours.get(t).length > 1 ? 's' : ''}</span></div>${blHTML}</section>`;
+  }).join('');
+  $('#liv-list').innerHTML = html;
+}
+$('#liv-prev').onclick = () => { livDay--; livTour = ''; renderLiv(); };
+$('#liv-next').onclick = () => { livDay++; livTour = ''; renderLiv(); };
+$('#liv-input').addEventListener('change', e => { const v = e.target.value; if (!v) return; const [y, m, d] = v.split('-').map(Number); livDay = daySerial(new Date(y, m - 1, d)); livTour = ''; renderLiv(); });
+$('#liv-upcoming').addEventListener('click', e => { const b = e.target.closest('[data-day]'); if (b) { livDay = +b.dataset.day; livTour = ''; renderLiv(); } });
+$('#liv-tours').addEventListener('click', e => { const b = e.target.closest('[data-tour]'); if (b) { livTour = b.dataset.tour; renderLiv(); } });
+
 /* ---------- Navigation ---------- */
 let tab = 'scan';
 function setTab(t) { tab = t; document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.tab === t ? 'page' : 'false')); render(); window.scrollTo(0, 0); }
@@ -1095,16 +1198,18 @@ function render() {
   $('#v-search').hidden = !has || tab !== 'search';
   $('#v-inv').hidden = !has || tab !== 'inv';
   $('#v-pret').hidden = !has || tab !== 'pret';
+  $('#v-liv').hidden = !has || tab !== 'liv';
   if (!has) return;
   if (tab === 'inv') renderInv();
   if (tab === 'pret') renderPret();
   if (tab === 'search') runSearch();
+  if (tab === 'liv') renderLiv();
 }
 function afterData() {
   const t = $('#datatxt'), d = $('#datadot');
   if (D) {
     const m = D.meta, fr = freshness();
-    t.innerHTML = m.demo ? '<span class="demo-tag">DÉMO</span> données d\u2019exemple' : `Données ${fmtDT(fr.when)}`;
+    t.innerHTML = m.demo ? '<span class="demo-tag">DÉMO</span> données d\u2019exemple' : fmtDT(fr.when);
     d.className = 'dot ' + fr.cls;
     $('#scanpad').innerHTML = scanButtons('scan');
     $('#scanhint').innerHTML = liveOK ? 'Douchette Bluetooth : bipez directement dans le champ.' : 'Touchez <b>Scanner</b> pour prendre l’étiquette en photo, bien à plat et nette. Une douchette Bluetooth fonctionne aussi dans le champ.';
