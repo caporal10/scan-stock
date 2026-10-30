@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '30/10 13:27';</script>
+<script>window.APP_VERSION = '30/10 14:25';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -156,7 +156,18 @@ dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
 .pill.motif-evt{background:var(--info-bg);color:var(--info);border-color:transparent}
 .pill.motif-cde{background:var(--warn-bg);color:var(--warn);border-color:transparent}
 .pill.motif-autre{background:var(--surface-2);color:var(--muted)}
-.item.pret .t{font-size:16px}
+.pgrp{border-bottom:1px solid var(--line)}
+.pgrp:last-child{border-bottom:0}
+.pgrp summary{list-style:none;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:12px 14px;cursor:pointer;align-items:center}
+.pgrp summary::-webkit-details-marker{display:none}
+.pgrp summary .t{font-weight:700;font-size:17px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pgrp summary .m{grid-column:1;color:var(--muted);font-size:12.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pgrp summary .r{grid-row:1 / span 2;grid-column:2;display:flex;align-items:center;gap:10px}
+.chev{width:9px;height:9px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:transform .15s;margin-top:-4px}
+.pgrp[open] .chev{transform:rotate(-135deg);margin-top:4px}
+.pgrp[open] summary{background:var(--surface-2);border-bottom:1px solid var(--line)}
+.item.sub{padding-left:28px;border-bottom:1px solid var(--line);color:var(--ink);background:var(--surface)}
+.pgrp .item.sub:last-child{border-bottom:0}
 .livinfo{display:flex;flex-wrap:wrap;gap:6px}
 .notfound{background:var(--bad-bg);color:var(--bad);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:4px}
 .notfound b{font-family:var(--f-display);font-size:22px;text-transform:uppercase}
@@ -1039,7 +1050,11 @@ function pretInfo(i) {
   if (!m) return null;
   let rest = m[1].trim(), motif = { k: 'autre', label: 'Autre' };
   for (const mo of MOTIFS) { const x = mo.re.exec(rest); if (x) { motif = mo; rest = rest.slice(x[0].length).replace(/^[\s:\-–_]+/, ''); break; } }
-  return { motif, qui: rest || 'Non précisé', loc };
+  // Code magasin ajouté en fin d'étiquette (CCRouen, RBNantes…) : retiré du nom, gardé à part
+  let code = '';
+  const cm = /[\s\-–_]+((?:CC|RB)[A-Za-zÀ-ÿ]+)\s*$/.exec(rest);
+  if (cm) { code = cm[1]; rest = rest.slice(0, cm.index).trim(); }
+  return { motif, qui: rest || 'Non précisé', code, loc };
 }
 const isPretable = i => /^pr[eêé]t$/i.test(show(i, 'Nature_stock'));
 const ENSEIGNE = { RB: 'Roche Bobois', CC: 'Cuir Center' };
@@ -1058,7 +1073,14 @@ function renderPret() {
     const chips = [['', 'Tous', out.length], ...MOTIFS.map(m => [m.k, m.label, cnt(m.k)]), ['autre', 'Autre', cnt('autre')]].filter(c => c[0] === '' || c[2]);
     const list = out.filter(i => !pretMotif || pretInfo(i).motif.k === pretMotif);
     body = `<div class="chips">${chips.map(([k, l, n]) => `<button class="chip" data-pm="${k}" aria-pressed="${pretMotif === k}">${l} · <b>${n}</b></button>`).join('')}</div>
-      <div class="list">${list.length ? list.map(i => { const p = pretInfo(i); return `<button class="item pret" data-fiche="${i}"><span class="t">${esc(p.qui)}</span><span class="m">${esc(show(i,'Modele') || show(i,'Article'))} · <span class="mono">${esc(show(i,'No_Stock'))}</span> · ${esc(ENSEIGNE[show(i,'Enseigne')] || show(i,'Enseigne'))} ${esc(show(i,'Magasin').replace(/^(Roche Bobois|Cuir Center)\s*/,''))}</span><span class="r"><span class="pill motif-${p.motif.k}">${esc(p.motif.label)}</span></span></button>`; }).join('') : '<div class="empty">Aucun canapé en prêt. Un article est « en prêt » quand sa localité commence par « Prêt ».</div>'}</div>`;
+      ${list.length ? (() => {
+        const grp = new Map();
+        list.forEach(i => { const p = pretInfo(i), k = norm(p.qui) + '|' + p.motif.k; if (!grp.has(k)) grp.set(k, { p, is: [] }); grp.get(k).is.push(i); });
+        return `<div class="list">` + [...grp.values()].sort((a, b) => a.p.qui.localeCompare(b.p.qui, 'fr')).map(({ p, is }) => `<details class="pgrp">
+          <summary><span class="t">${esc(p.qui)}</span><span class="m">${is.length} article${is.length > 1 ? 's' : ''} · ${esc([...new Set(is.map(i => pretInfo(i).code || show(i, 'Magasin')))].join(', '))}</span><span class="r"><span class="pill motif-${p.motif.k}">${esc(p.motif.label)}</span><span class="chev" aria-hidden="true"></span></span></summary>
+          ${is.map(i => `<button class="item sub" data-fiche="${i}"><span class="t">${esc(show(i,'Modele') || show(i,'Article'))}</span><span class="m"><span class="mono">${esc(show(i,'No_Stock'))}</span>${show(i,'Article') && show(i,'Modele') ? ' · ' + esc(show(i,'Article')) : ''}</span><span class="r"></span></button>`).join('')}
+        </details>`).join('') + `</div>`;
+      })() : '<div class="list"><div class="empty">Aucun canapé en prêt. Un article est « en prêt » quand sa localité commence par « Prêt ».</div></div>'}`;
   } else {
     const cnt = e => dispo.filter(i => show(i, 'Enseigne') === e).length;
     const list = dispo.filter(i => !pretEns || show(i, 'Enseigne') === pretEns);
