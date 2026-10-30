@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '30/10 14:29';</script>
+<script>window.APP_VERSION = '30/10 14:45';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -168,6 +168,10 @@ dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
 .pgrp[open] summary{background:var(--surface-2);border-bottom:1px solid var(--line)}
 .item.sub{padding-left:28px;border-bottom:1px solid var(--line);color:var(--ink);background:var(--surface)}
 .pgrp .item.sub:last-child{border-bottom:0}
+.scope{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--info-bg);color:var(--info);border-radius:8px;padding:8px 12px;font-size:13.5px}
+.scope b{font-weight:700}
+.scope.off{background:var(--warn-bg);color:var(--warn)}
+.scope .chip{background:var(--surface);color:var(--ink)}
 .livinfo{display:flex;flex-wrap:wrap;gap:6px}
 .notfound{background:var(--bad-bg);color:var(--bad);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:4px}
 .notfound b{font-family:var(--f-display);font-size:22px;text-transform:uppercase}
@@ -354,6 +358,7 @@ dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
         </div>
         <div class="chips" id="liv-upcoming"></div>
       </div>
+      <div id="liv-scope"></div>
       <div id="liv-sum"></div>
       <div class="chips" id="liv-tours"></div>
       <div id="liv-list" class="view" style="gap:14px"></div>
@@ -413,7 +418,7 @@ const idb = {
 };
 
 /* ---------- Réglages ---------- */
-const settings = Object.assign({ son: true, vib: true, details: true, fields: null, livTour: '', livJour: 'demain', searchMag: '' }, store.get('settings', {}));
+const settings = Object.assign({ son: true, vib: true, details: true, fields: null, livTour: '', livJour: 'demain', searchMag: '', profil: 'admin' }, store.get('settings', {}));
 if (!Array.isArray(settings.fields)) settings.fields = ['Article', 'Couleur', 'Magasin', '@dims', 'Fournisseur', 'Nom_Client', 'No_cde_client'];
 const saveSettings = () => store.set('settings', settings);
 
@@ -1065,7 +1070,8 @@ function pretItem(i, extra) {
 function renderPret() {
   const el = $('#v-pret'); if (!D) return;
   const out = [], dispo = [];
-  for (let i = 0; i < D.rows.length; i++) { if (pretInfo(i)) out.push(i); else if (isPretable(i)) dispo.push(i); }
+  const sc = scopeMags();
+  for (let i = 0; i < D.rows.length; i++) { if (!inPretScope(i, sc)) continue; if (pretInfo(i)) out.push(i); else if (isPretable(i)) dispo.push(i); }
   // Comptage par prêt (client / événement), pas par article
   const pretKey = i => { const p = pretInfo(i); return norm(p.qui) + '|' + p.motif.k; };
   const nbPrets = l => new Set(l.map(pretKey)).size;
@@ -1091,7 +1097,7 @@ function renderPret() {
     body = `<div class="chips">${[['', 'Tous', dispo.length], ['RB', 'Roche Bobois', cnt('RB')], ['CC', 'Cuir Center', cnt('CC')]].map(([k, l, n]) => `<button class="chip ens-${k || 'all'}" data-pe="${k}" aria-pressed="${pretEns === k}">${l} · <b>${n}</b></button>`).join('')}</div>
       ${list.length ? [...byMag.entries()].sort((a, b) => a[0].localeCompare(b[0], 'fr')).map(([m, is]) => `<div class="view" style="gap:8px"><h3>${esc(m)} · ${is.length}</h3><div class="list">${is.map(i => pretItem(i, esc([show(i,'Article'), show(i,'Couleur')].filter(Boolean).join(' · ')))).join('')}</div></div>`).join('') : '<div class="list"><div class="empty">Aucun article à prêter. Un article est « à prêter » quand sa nature de stock est PRET et qu\u2019il n\u2019est pas déjà en prêt.</div></div>'}`;
   }
-  el.innerHTML = `<div class="panel"><h2>Prêts</h2>${seg}</div>${body}`;
+  el.innerHTML = `<div class="panel"><h2>Prêts</h2>${seg}</div>${scopeBar('pret')}${body}`;
   el.querySelectorAll('[data-pv]').forEach(b => b.onclick = () => { pretView = b.dataset.pv; renderPret(); });
   el.querySelectorAll('[data-pm]').forEach(b => b.onclick = () => { pretMotif = b.dataset.pm; renderPret(); });
   el.querySelectorAll('[data-pe]').forEach(b => b.onclick = () => { pretEns = b.dataset.pe; renderPret(); });
@@ -1189,6 +1195,45 @@ function odBindPanel() {
   });
 }
 
+/* ---------- Profils utilisateur (périmètre) ---------- */
+const MAGS = { CCRouen: 'Cuir Center Rouen', CCLeHavre: 'Cuir Center Le Havre', CCNantes: 'Cuir Center Nantes', RBRouen: 'Roche Bobois Rouen', RBNantes: 'Roche Bobois Nantes', RBRennes: 'Roche Bobois Rennes', RBTours: 'Roche Bobois Tours' };
+const PROFILS = {
+  admin: { label: 'Administrateur', mags: null },
+  // Tournées des dépôts : numéro en tête du nom (1 à 3 Rouen, 4 à 6 Rennes/Nantes, 7 Tours)
+  'dep-maromme': { label: 'Dépôt Maromme', mags: ['CCRouen', 'CCLeHavre', 'RBRouen'], tours: [1, 2, 3] },
+  'dep-rennes': { label: 'Dépôt Rennes', mags: ['RBRennes', 'RBNantes', 'CCNantes'], tours: [4, 5, 6] },
+  'dep-tours': { label: 'Dépôt Tours', mags: ['RBTours'], tours: [7] },
+  ...Object.fromEntries(Object.entries(MAGS).map(([k, v]) => ['mag-' + k, { label: v, mags: [k] }]))
+};
+let scopeOn = true; // « Tout voir » le désactive pour la session
+const profil = () => PROFILS[settings.profil] || PROFILS.admin;
+function scopeMags() {
+  const p = profil(); if (!p.mags || !scopeOn) return null;
+  return { names: new Set(p.mags.map(k => norm(MAGS[k]))), codes: new Set(p.mags.map(k => k.toLowerCase())) };
+}
+// Prêts : l'article appartient à un magasin du périmètre (ou porte son code magasin)
+function inPretScope(i, sc) {
+  if (!sc) return true;
+  if (sc.names.has(norm(show(i, 'Magasin')))) return true;
+  const p = pretInfo(i); return !!(p && p.code && sc.codes.has(p.code.toLowerCase()));
+}
+// Livraisons : tournées utilisées par les magasins du périmètre (déduites du fichier)
+function scopeTours(sc) {
+  if (!sc) return null;
+  if (D.tourCache && D.tourCache.key === settings.profil) return D.tourCache.set;
+  const set = new Set(), ct = D.col.Tournee, cm = D.col.Magasin;
+  if (ct != null) D.rows.forEach(r => { const t = r[ct]; if (!isEmpty(t) && sc.names.has(norm(r[cm]))) set.add(String(t).trim()); });
+  D.tourCache = { key: settings.profil, set };
+  return set;
+}
+function scopeBar(where) {
+  const p = profil(); if (!p.mags) return '';
+  return scopeOn
+    ? `<div class="scope"><span>Filtré : <b>${esc(p.label)}</b>${where === 'liv' ? (p.tours ? ' · tournées ' + p.tours.join(', ') : ' · vos clients') : ''}</span><button class="chip" data-scope="off">Tout voir</button></div>`
+    : `<div class="scope off"><span>Tout est affiché</span><button class="chip" data-scope="on">Revenir à ${esc(p.label)}</button></div>`;
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-scope]'); if (!b) return; scopeOn = b.dataset.scope === 'on'; if (tab === 'liv') { livTour = livDefaultTour(); renderLiv(); } else if (tab === 'pret') renderPret(); });
+
 /* ---------- Préférences par défaut ---------- */
 function prefsHTML() {
   const uniq = k => { const c = D.col[k], m = new Set(); if (c != null) D.rows.forEach(r => { const v = r[c]; if (!isEmpty(v)) m.add(String(v).trim()); }); return [...m].sort((a, b) => a.localeCompare(b, 'fr', { numeric: true })); };
@@ -1198,6 +1243,12 @@ function prefsHTML() {
   return `<div class="panel">
     <h3>Mes préférences</h3>
     <p class="hint">Enregistrées sur ce téléphone : chaque utilisateur règle les siennes.</p>
+    <label class="pref"><span>Je suis</span><select id="set-profil">
+      <option value="admin" ${settings.profil === 'admin' ? 'selected' : ''}>Administrateur (voit tout)</option>
+      <optgroup label="Dépôts">${['dep-maromme', 'dep-rennes', 'dep-tours'].map(k => `<option value="${k}" ${settings.profil === k ? 'selected' : ''}>${PROFILS[k].label} (${PROFILS[k].mags.join(', ')})</option>`).join('')}</optgroup>
+      <optgroup label="Magasins">${Object.keys(MAGS).map(k => `<option value="mag-${k}" ${settings.profil === 'mag-' + k ? 'selected' : ''}>${MAGS[k]}</option>`).join('')}</optgroup>
+    </select></label>
+    <p class="hint">Prêts et Livraisons s’affichent filtrés sur votre périmètre : un dépôt voit ses tournées complètes, un magasin ses propres clients. Le bouton « Tout voir » lève le filtre.</p>
     <label class="pref"><span>Livraison : tournée par défaut</span><select id="set-livtour">${o(tours, settings.livTour, 'Toutes les tournées')}</select></label>
     <label class="pref"><span>Livraison : jour à l\u2019ouverture</span><select id="set-livjour"><option value="demain" ${settings.livJour !== 'auj' ? 'selected' : ''}>Demain</option><option value="auj" ${settings.livJour === 'auj' ? 'selected' : ''}>Aujourd\u2019hui</option></select></label>
     <label class="pref"><span>Recherche : magasin par défaut</span><select id="set-mag">${o(mags, settings.searchMag, 'Tous les magasins')}</select></label>
@@ -1236,6 +1287,7 @@ function openSettings() {
   $('#set-reload').onclick = () => { closeSheet(); pickFile(); };
   $('#set-clear').onclick = async () => { await idb.del('data'); D = null; closeSheet(); afterData(); toast('Données retirées'); };
   if (D) {
+    $('#set-profil').onchange = e => { settings.profil = e.target.value; saveSettings(); scopeOn = true; livTour = livDefaultTour(); render(); };
     $('#set-livtour').onchange = e => { settings.livTour = e.target.value; saveSettings(); livTour = livDefaultTour(); };
     $('#set-livjour').onchange = e => { settings.livJour = e.target.value; saveSettings(); livDay = null; };
     $('#set-mag').onchange = e => { settings.searchMag = e.target.value; saveSettings(); $('#f-mag').value = settings.searchMag; };
@@ -1293,9 +1345,15 @@ function renderLiv() {
   const sd = serialDate(livDay);
   $('#liv-input').value = `${sd.getFullYear()}-${String(sd.getMonth() + 1).padStart(2, '0')}-${String(sd.getDate()).padStart(2, '0')}`;
   // prochains jours avec livraisons
-  const up = [...byDay.keys()].filter(n => n >= today).sort((a, b) => a - b).slice(0, 8);
-  $('#liv-upcoming').innerHTML = up.length ? up.map(n => `<button class="chip" data-day="${n}" aria-pressed="${n === livDay}">${esc(n === today ? 'Auj.' : n === today + 1 ? 'Demain' : fmtSerial(n, { weekday: 'short', day: '2-digit', month: '2-digit' }))} · <b>${new Set(byDay.get(n).map(i => show(i, 'No_BL') || 'i' + i)).size}</b></button>`).join('') : '<span class="hint">Aucune livraison à venir dans le fichier.</span>';
-  const items = (byDay.get(livDay) || []).slice();
+  const sc = scopeMags(), prof = profil();
+  const tourNum = t => { const m = /^\s*(\d+)/.exec(t || ''); return m ? +m[1] : null; };
+  const inLiv = !sc ? (() => true)
+    : prof.tours ? (i => prof.tours.includes(tourNum(show(i, 'Tournee'))))
+    : (i => sc.names.has(norm(show(i, 'Magasin'))));
+  $('#liv-scope').innerHTML = scopeBar('liv');
+  const up = [...byDay.keys()].filter(n => n >= today && byDay.get(n).some(inLiv)).sort((a, b) => a - b).slice(0, 8);
+  $('#liv-upcoming').innerHTML = up.length ? up.map(n => `<button class="chip" data-day="${n}" aria-pressed="${n === livDay}">${esc(n === today ? 'Auj.' : n === today + 1 ? 'Demain' : fmtSerial(n, { weekday: 'short', day: '2-digit', month: '2-digit' }))} · <b>${new Set(byDay.get(n).filter(inLiv).map(i => show(i, 'No_BL') || 'i' + i)).size}</b></button>`).join('') : '<span class="hint">Aucune livraison à venir dans le fichier.</span>';
+  const items = (byDay.get(livDay) || []).filter(inLiv);
   // tournées du jour
   const tours = new Map(); items.forEach(i => { const t = show(i, 'Tournee') || 'Sans tournée'; if (!tours.has(t)) tours.set(t, []); tours.get(t).push(i); });
   const tourNames = [...tours.keys()].sort((a, b) => a.localeCompare(b, 'fr', { numeric: true }));
