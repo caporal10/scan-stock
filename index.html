@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '30/10 09:25';</script>
+<script>window.APP_VERSION = '30/10 10:12';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -62,6 +62,9 @@ button{cursor:pointer}
 .dot.on{background:var(--ok)} .dot.warn{background:var(--signal)} .dot.bad{background:var(--bad)} .dot.demo{background:var(--signal)}
 .iconbtn{flex:none;width:38px;height:38px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);display:grid;place-items:center}
 .iconbtn svg{width:20px;height:20px}
+.iconbtn.cam-btn{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.top{gap:8px}
+@media (max-width:400px){.brand small{display:none}.brand{font-size:19px}}
 .iconbtn.busy svg{animation:sp .9s linear infinite}
 @media (prefers-reduced-motion:reduce){.iconbtn.busy svg{animation:none}}
 
@@ -145,6 +148,9 @@ dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
 .loc.vide{background:transparent;color:var(--muted);font-weight:400;font-family:var(--f-body);border:1px dashed var(--line)}
 .slot{font-family:var(--f-display);font-weight:700;font-size:17px;letter-spacing:.02em;background:var(--accent);color:var(--accent-ink);border-radius:6px;padding:2px 8px;align-self:center}
 .slot.vide{background:transparent;color:var(--muted);border:1px dashed var(--line);font-weight:600;font-size:13px}
+.pref{display:flex;flex-direction:column;gap:6px;padding:8px 0;border-bottom:1px solid var(--line)}
+.pref:last-child{border-bottom:0}
+.pref span{font-weight:500}
 .livinfo{display:flex;flex-wrap:wrap;gap:6px}
 .notfound{background:var(--bad-bg);color:var(--bad);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:4px}
 .notfound b{font-family:var(--f-display);font-size:22px;text-transform:uppercase}
@@ -245,6 +251,9 @@ dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
     <div class="brand">Scan Stock<small>Lecture seule</small></div>
     <button class="datastat" id="datastat" style="border:0;background:none;padding:0" aria-label="Données chargées">
       <span class="txt" id="datatxt">Aucun fichier</span><span class="dot" id="datadot"></span>
+    </button>
+    <button class="iconbtn cam-btn" id="btn-cam" aria-label="Scanner un code-barre" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></svg>
     </button>
     <button class="iconbtn" id="btn-refresh" aria-label="Actualiser les données" hidden>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16M20 20v-4h-4"/></svg>
@@ -385,7 +394,7 @@ const idb = {
 };
 
 /* ---------- Réglages ---------- */
-const settings = Object.assign({ son: true, vib: true, details: true, fields: null }, store.get('settings', {}));
+const settings = Object.assign({ son: true, vib: true, details: true, fields: null, livTour: '', livJour: 'demain', searchMag: '' }, store.get('settings', {}));
 if (!Array.isArray(settings.fields)) settings.fields = ['Article', 'Couleur', 'Magasin', '@dims', 'Fournisseur', 'Nom_Client', 'No_cde_client'];
 const saveSettings = () => store.set('settings', settings);
 
@@ -788,6 +797,7 @@ function fillFilters() {
   for (const r of D.rows) { mags.set(r[cm], (mags.get(r[cm]) || 0) + 1); etats.set(r[ce], (etats.get(r[ce]) || 0) + 1); }
   const opt = (m, all) => `<option value="">${all}</option>` + [...m.entries()].filter(([k]) => !isEmpty(k)).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<option value="${esc(k)}">${esc(k)} (${n.toLocaleString('fr-FR')})</option>`).join('');
   $('#f-mag').innerHTML = opt(mags, 'Tous les magasins'); $('#f-etat').innerHTML = opt(etats, 'Tous les états');
+  if (settings.searchMag && mags.has(settings.searchMag)) $('#f-mag').value = settings.searchMag;
 }
 let qT = 0;
 function runSearch() {
@@ -1059,6 +1069,7 @@ async function odRefresh({ force = false, interactive = false, quiet = false } =
 }
 function autoRefresh() { if (od.link && od.account && Date.now() - od.lastCheck > 5 * 60000) odRefresh({ quiet: true }); }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && od.link && Date.now() - od.lastCheck > 2 * 60000) odRefresh({ quiet: true }); });
+$('#btn-cam').onclick = () => { ensureAudio(); if (liveOK) startLive('scan'); else openPhoto('scan'); };
 $('#btn-refresh').onclick = () => { ensureAudio(); if (od.link) odRefresh({ interactive: true }); else pickFile(); };
 
 function odPanelHTML() {
@@ -1100,6 +1111,21 @@ function odBindPanel() {
   });
 }
 
+/* ---------- Préférences par défaut ---------- */
+function prefsHTML() {
+  const uniq = k => { const c = D.col[k], m = new Set(); if (c != null) D.rows.forEach(r => { const v = r[c]; if (!isEmpty(v)) m.add(String(v).trim()); }); return [...m].sort((a, b) => a.localeCompare(b, 'fr', { numeric: true })); };
+  const tours = uniq('Tournee'); if (settings.livTour && !tours.includes(settings.livTour)) tours.push(settings.livTour);
+  const mags = uniq('Magasin'); if (settings.searchMag && !mags.includes(settings.searchMag)) mags.push(settings.searchMag);
+  const o = (list, cur, all) => `<option value="">${all}</option>` + list.map(v => `<option value="${esc(v)}" ${v === cur ? 'selected' : ''}>${esc(v)}</option>`).join('');
+  return `<div class="panel">
+    <h3>Mes préférences</h3>
+    <p class="hint">Enregistrées sur ce téléphone : chaque utilisateur règle les siennes.</p>
+    <label class="pref"><span>Livraison : tournée par défaut</span><select id="set-livtour">${o(tours, settings.livTour, 'Toutes les tournées')}</select></label>
+    <label class="pref"><span>Livraison : jour à l\u2019ouverture</span><select id="set-livjour"><option value="demain" ${settings.livJour !== 'auj' ? 'selected' : ''}>Demain</option><option value="auj" ${settings.livJour === 'auj' ? 'selected' : ''}>Aujourd\u2019hui</option></select></label>
+    <label class="pref"><span>Recherche : magasin par défaut</span><select id="set-mag">${o(mags, settings.searchMag, 'Tous les magasins')}</select></label>
+  </div>`;
+}
+
 /* ---------- Réglages ---------- */
 function openSettings() {
   const m = D && D.meta;
@@ -1115,6 +1141,7 @@ function openSettings() {
       <div class="row"><button class="btn primary" id="set-reload">Charger un fichier à jour</button><button class="btn danger" id="set-clear" ${m ? '' : 'disabled'}>Retirer les données du téléphone</button></div>
       <p class="hint">Lecture seule : l'appli travaille sur une copie en mémoire. Elle ne modifie jamais votre fichier Excel ni sa connexion au logiciel de stock. Les données restent sur ce téléphone.</p>
     </div>
+    ${D ? prefsHTML() : ''}
     <div class="panel">
       <h3>Infos affichées après un scan</h3>
       <p class="hint">Le N° de stock, l'état et le modèle sont toujours en tête. Choisissez en dessous les infos qui suivent, dans l'ordre voulu.</p>
@@ -1130,6 +1157,11 @@ function openSettings() {
     <div class="panel"><h3>Mode de scan</h3><p class="lead">${liveOK ? 'Caméra en direct disponible.' : "Dans cette vue, la caméra en direct n'est pas autorisée : le scan passe par une photo. Une douchette Bluetooth fonctionne aussi dans le champ de saisie."}</p></div>`);
   $('#set-reload').onclick = () => { closeSheet(); pickFile(); };
   $('#set-clear').onclick = async () => { await idb.del('data'); D = null; closeSheet(); afterData(); toast('Données retirées'); };
+  if (D) {
+    $('#set-livtour').onchange = e => { settings.livTour = e.target.value; saveSettings(); livTour = livDefaultTour(); };
+    $('#set-livjour').onchange = e => { settings.livJour = e.target.value; saveSettings(); livDay = null; };
+    $('#set-mag').onchange = e => { settings.searchMag = e.target.value; saveSettings(); $('#f-mag').value = settings.searchMag; };
+  }
   $('#set-details').onchange = e => { settings.details = e.target.checked; saveSettings(); refreshFiche(); };
   renderFieldEditor();
   odBindPanel();
@@ -1164,7 +1196,8 @@ $('#btn-demo').onclick = demoData;
 $('#file-xlsx').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) { setTab('scan'); render(); loadFile(f); } });
 
 /* ---------- Livraisons ---------- */
-let livDay = null, livTour = '';
+let livDay = null, livTour = null;
+const livDefaultTour = () => settings.livTour || '';
 function livIndex() {
   if (D.livCache) return D.livCache;
   const c = D.col.Date_BL, byDay = new Map();
@@ -1173,7 +1206,8 @@ function livIndex() {
 }
 function renderLiv() {
   const today = daySerial(new Date());
-  if (livDay == null) livDay = today + 1;
+  if (livDay == null) livDay = settings.livJour === 'auj' ? today : today + 1;
+  if (livTour == null) livTour = livDefaultTour();
   const byDay = livIndex();
   $('#liv-day').textContent = dayLabel(livDay);
   const rel = Math.abs(livDay - today) <= 1;
@@ -1187,11 +1221,12 @@ function renderLiv() {
   // tournées du jour
   const tours = new Map(); items.forEach(i => { const t = show(i, 'Tournee') || 'Sans tournée'; if (!tours.has(t)) tours.set(t, []); tours.get(t).push(i); });
   const tourNames = [...tours.keys()].sort((a, b) => a.localeCompare(b, 'fr', { numeric: true }));
-  if (livTour && !tours.has(livTour)) livTour = '';
+  let absent = '';
+  if (livTour && !tours.has(livTour)) { if (items.length) absent = livTour; livTour = ''; }
   const nbBL = l => new Set(l.map(i => show(i, 'No_BL') || 'i' + i)).size;
   $('#liv-tours').innerHTML = tourNames.length > 1 ? [`<button class="chip" data-tour="" aria-pressed="${!livTour}">Toutes · <b>${nbBL(items)}</b></button>`, ...tourNames.map(t => `<button class="chip" data-tour="${esc(t)}" aria-pressed="${livTour === t}">${esc(t)} · <b>${nbBL(tours.get(t))}</b></button>`)].join('') : '';
   $('#liv-sum').innerHTML = items.length
-    ? `<p class="count">${nbBL(items)} livraison${nbBL(items) > 1 ? 's' : ''} · ${items.length} article${items.length > 1 ? 's' : ''} · ${tourNames.length} tournée${tourNames.length > 1 ? 's' : ''}</p>`
+    ? (absent ? `<p class="hint">Aucune livraison ${esc(absent)} ce jour : toutes les tournées sont affichées.</p>` : '') + `<p class="count">${nbBL(items)} livraison${nbBL(items) > 1 ? 's' : ''} · ${items.length} article${items.length > 1 ? 's' : ''} · ${tourNames.length} tournée${tourNames.length > 1 ? 's' : ''}</p>`
     : `<div class="list"><div class="empty">Aucune livraison prévue ${rel ? dayLabel(livDay).toLowerCase() : 'le ' + fmtSerial(livDay)}.${up.length ? ' Touchez une date ci-dessus pour voir les prochaines.' : ''}</div></div>`;
   // liste par tournée puis par BL (client)
   const html = tourNames.filter(t => !livTour || t === livTour).map(t => {
@@ -1208,10 +1243,10 @@ function renderLiv() {
   }).join('');
   $('#liv-list').innerHTML = html;
 }
-$('#liv-prev').onclick = () => { livDay--; livTour = ''; renderLiv(); };
-$('#liv-next').onclick = () => { livDay++; livTour = ''; renderLiv(); };
-$('#liv-input').addEventListener('change', e => { const v = e.target.value; if (!v) return; const [y, m, d] = v.split('-').map(Number); livDay = daySerial(new Date(y, m - 1, d)); livTour = ''; renderLiv(); });
-$('#liv-upcoming').addEventListener('click', e => { const b = e.target.closest('[data-day]'); if (b) { livDay = +b.dataset.day; livTour = ''; renderLiv(); } });
+$('#liv-prev').onclick = () => { livDay--; livTour = livDefaultTour(); renderLiv(); };
+$('#liv-next').onclick = () => { livDay++; livTour = livDefaultTour(); renderLiv(); };
+$('#liv-input').addEventListener('change', e => { const v = e.target.value; if (!v) return; const [y, m, d] = v.split('-').map(Number); livDay = daySerial(new Date(y, m - 1, d)); livTour = livDefaultTour(); renderLiv(); });
+$('#liv-upcoming').addEventListener('click', e => { const b = e.target.closest('[data-day]'); if (b) { livDay = +b.dataset.day; livTour = livDefaultTour(); renderLiv(); } });
 $('#liv-tours').addEventListener('click', e => { const b = e.target.closest('[data-tour]'); if (b) { livTour = b.dataset.tour; renderLiv(); } });
 
 /* ---------- Navigation ---------- */
@@ -1241,8 +1276,8 @@ function afterData() {
     $('#scanpad').innerHTML = scanButtons('scan');
     $('#scanhint').innerHTML = liveOK ? 'Douchette Bluetooth : bipez directement dans le champ.' : 'Touchez <b>Scanner</b> pour prendre l’étiquette en photo, bien à plat et nette. Une douchette Bluetooth fonctionne aussi dans le champ.';
     fillFilters(); invExpCache = null; renderHist();
-    $('#btn-refresh').hidden = false;
-  } else { t.textContent = od.link ? 'Chargement OneDrive…' : 'Aucun fichier'; d.className = 'dot'; $('#btn-refresh').hidden = !od.link; }
+    $('#btn-refresh').hidden = false; $('#btn-cam').hidden = false;
+  } else { t.textContent = od.link ? 'Chargement OneDrive…' : 'Aucun fichier'; d.className = 'dot'; $('#btn-refresh').hidden = !od.link; $('#btn-cam').hidden = true; }
   updateBadge(); render();
   if (D && pendingHash) { const c = pendingHash; pendingHash = null; handleScan(c); }
 }
