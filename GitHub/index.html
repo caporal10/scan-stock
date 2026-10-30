@@ -1,0 +1,1150 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f5e57">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Scan Stock">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+</head>
+<body>
+<title>Scan Stock</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout : app mobile à une colonne — barre d'état données en haut, vue active, barre d'onglets fixe en bas. */
+:root{
+  --bg:#eef1ee; --surface:#ffffff; --surface-2:#f6f8f6; --ink:#16201c; --muted:#5d6a64; --line:#d6dcd7;
+  --accent:#0f5e57; --accent-ink:#ffffff; --signal:#e3a21a;
+  --ok:#1d7a46; --ok-bg:#e3f3e8; --warn:#9a6212; --warn-bg:#fbf0d9; --bad:#b42318; --bad-bg:#fbe5e2; --info:#2f5fa8; --info-bg:#e4ecf8;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1513; --surface:#17201d; --surface-2:#1d2724; --ink:#e6ebe8; --muted:#97a49e; --line:#2b3632;
+  --accent:#4db0a5; --accent-ink:#06201d; --signal:#f0b43c;
+  --ok:#5fd08e; --ok-bg:#163525; --warn:#f0b75a; --warn-bg:#3a2c12; --bad:#ff8a7d; --bad-bg:#3d1a17; --info:#8db4f0; --info-bg:#1a2a44;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1513; --surface:#17201d; --surface-2:#1d2724; --ink:#e6ebe8; --muted:#97a49e; --line:#2b3632;
+  --accent:#4db0a5; --accent-ink:#06201d; --signal:#f0b43c;
+  --ok:#5fd08e; --ok-bg:#163525; --warn:#f0b75a; --warn-bg:#3a2c12; --bad:#ff8a7d; --bad-bg:#3d1a17; --info:#8db4f0; --info-bg:#1a2a44;
+  color-scheme:dark}
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html,body{min-height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;margin:0;-webkit-tap-highlight-color:transparent}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+/* Barre du haut */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px;
+  display:flex;align-items:center;gap:12px}
+.brand{font-family:var(--f-display);font-weight:700;font-size:21px;letter-spacing:.02em;text-transform:uppercase;line-height:1;white-space:nowrap}
+.brand small{display:block;font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--muted);margin-top:3px}
+.datastat{flex:1;min-width:0;display:flex;align-items:center;gap:8px;justify-content:flex-end;font-size:12px;color:var(--muted)}
+.datastat .txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.dot.on{background:var(--ok)} .dot.warn{background:var(--signal)} .dot.bad{background:var(--bad)} .dot.demo{background:var(--signal)}
+.iconbtn{flex:none;width:38px;height:38px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);display:grid;place-items:center}
+.iconbtn svg{width:20px;height:20px}
+.iconbtn.busy svg{animation:sp .9s linear infinite}
+@media (prefers-reduced-motion:reduce){.iconbtn.busy svg{animation:none}}
+
+main{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:16px calc(84px + env(safe-area-inset-bottom,0px));max-width:760px;margin:0 auto}
+.view{display:flex;flex-direction:column;gap:16px}
+h2{font-family:var(--f-display);font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;margin:0;line-height:1.05;text-wrap:balance}
+h3{font-family:var(--f-display);font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0}
+p{margin:0}
+.lead{color:var(--muted);max-width:62ch}
+
+/* Panneaux */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.scanpad{display:grid;grid-template-columns:1fr auto;gap:10px}
+.btn{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:11px 14px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px}
+.btn svg{width:20px;height:20px;flex:none}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.big{min-height:64px;font-family:var(--f-display);font-size:22px;letter-spacing:.04em;text-transform:uppercase}
+.btn.big svg{width:28px;height:28px}
+.btn.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 40%,var(--line))}
+.btn.full{width:100%}
+.btn:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row>.btn{flex:1 1 140px}
+.field{display:flex;gap:8px}
+.field input{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:11px 12px;min-height:46px}
+.field input.code{font-family:var(--f-mono);letter-spacing:.04em}
+select{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:10px;min-height:44px;min-width:0;width:100%}
+.hint{font-size:12.5px;color:var(--muted)}
+.hint b{color:var(--ink);font-weight:600}
+
+/* Fiche article */
+.fiche{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;min-width:0}
+.fiche-head{padding:16px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line);position:relative}
+.fiche-head::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--st,var(--muted))}
+.fiche-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ns{font-family:var(--f-mono);font-size:15px;font-weight:600;letter-spacing:.05em}
+.modele{font-family:var(--f-display);font-weight:700;font-size:28px;line-height:1.02;text-transform:uppercase;text-wrap:balance;overflow-wrap:anywhere}
+.sub{color:var(--muted);overflow-wrap:anywhere}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:12.5px;font-weight:600;background:var(--surface-2);color:var(--muted);border:1px solid var(--line);white-space:nowrap}
+.pill.ok{background:var(--ok-bg);color:var(--ok);border-color:transparent}
+.pill.warn{background:var(--warn-bg);color:var(--warn);border-color:transparent}
+.pill.bad{background:var(--bad-bg);color:var(--bad);border-color:transparent}
+.pill.info{background:var(--info-bg);color:var(--info);border-color:transparent}
+.pill.mag{background:transparent}
+.sec{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.sec:last-child{border-bottom:0}
+dl{display:grid;grid-template-columns:minmax(110px,38%) 1fr;gap:6px 14px;margin:0}
+dt{color:var(--muted);font-size:13px}
+dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
+.sec.key dd{font-size:16px;font-weight:600}
+.more{border-top:1px solid var(--line)}
+.more summary{padding:13px 16px;font-weight:600;color:var(--accent);cursor:pointer;list-style:none;display:flex;justify-content:space-between}
+.more summary::-webkit-details-marker{display:none}
+.more summary::after{content:"+";font-family:var(--f-mono)}
+.more[open] summary::after{content:"−"}
+.more .sec:first-of-type{border-top:1px solid var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:500}
+.item.fld{grid-template-columns:1fr auto}
+.x:disabled{opacity:.35;cursor:default}
+.notfound{background:var(--bad-bg);color:var(--bad);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:4px}
+.notfound b{font-family:var(--f-display);font-size:22px;text-transform:uppercase}
+
+/* Listes */
+.list{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.item{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:11px 14px;border-bottom:1px solid var(--line);text-align:left;background:none;border-left:0;border-right:0;border-top:0;width:100%;align-items:center}
+.item:last-child{border-bottom:0}
+.item .t{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .m{grid-column:1;color:var(--muted);font-size:12.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .r{grid-row:1 / span 2;grid-column:2;display:flex;align-items:center;gap:8px}
+.x{width:30px;height:30px;border-radius:6px;border:1px solid var(--line);background:var(--surface-2);display:grid;place-items:center;color:var(--muted)}
+.empty{padding:18px 14px;color:var(--muted);font-size:13.5px}
+.count{font-size:12.5px;color:var(--muted)}
+
+/* Inventaire */
+.progress{height:10px;border-radius:5px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden}
+.progress>i{display:block;height:100%;background:var(--ok);width:0;transition:width .3s}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:2px;text-align:left;min-width:0}
+.tile b{font-family:var(--f-display);font-size:28px;line-height:1;font-variant-numeric:tabular-nums}
+.tile span{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.tile.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.tile.ok b{color:var(--ok)} .tile.bad b{color:var(--bad)} .tile.warn b{color:var(--warn)}
+@media (max-width:420px){.tiles{grid-template-columns:repeat(2,1fr)}}
+.zone{display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1px dashed var(--line);border-radius:8px;padding:8px 12px}
+.zone .lbl{font-size:11.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.zone .val{font-family:var(--f-mono);font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.banner{border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:2px;background:var(--surface-2);border:1px solid var(--line)}
+.banner .k{font-family:var(--f-display);font-weight:700;font-size:20px;text-transform:uppercase;letter-spacing:.02em}
+.banner.ok{background:var(--ok-bg);border-color:transparent;color:var(--ok)}
+.banner.bad{background:var(--bad-bg);border-color:transparent;color:var(--bad)}
+.banner.warn{background:var(--warn-bg);border-color:transparent;color:var(--warn)}
+.banner.info{background:var(--info-bg);border-color:transparent;color:var(--info)}
+.banner .d{color:var(--ink);font-size:13.5px;overflow-wrap:anywhere}
+.checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px}
+.check{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);min-width:0}
+.check input{width:18px;height:18px;accent-color:var(--accent);flex:none}
+.check span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.check em{font-style:normal;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{flex:1;border:0;background:var(--surface-2);padding:10px;font-weight:600;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+
+/* Onglets */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);
+  display:grid;grid-template-columns:repeat(2,1fr);
+  padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px));padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabs button{border:0;background:none;padding:8px 4px 10px;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:11.5px;font-weight:600;letter-spacing:.03em;position:relative}
+.tabs button svg{width:24px;height:24px}
+.tabs button[aria-current="page"]{color:var(--accent)}
+.tabs button[aria-current="page"]::before{content:"";position:absolute;top:0;left:25%;right:25%;height:3px;border-radius:0 0 3px 3px;background:var(--accent)}
+.tabs .badge{position:absolute;top:4px;left:calc(50% + 6px);background:var(--signal);color:#1b1404;border-radius:999px;font-size:10px;padding:0 5px;line-height:16px}
+
+/* Feuille (fiche / réglages) */
+.sheet{position:fixed;inset:0;z-index:40;background:color-mix(in srgb,#000 45%,transparent);display:flex;align-items:flex-end;justify-content:center}
+.sheet-in{background:var(--bg);width:100%;max-width:760px;max-height:92%;overflow:auto;border-radius:14px 14px 0 0;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px calc(20px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px}
+.sheet-bar{display:flex;align-items:center;gap:10px;position:sticky;top:-12px;background:var(--bg);padding-block:8px;z-index:1}
+.sheet-bar h3{flex:1}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.toggle:last-child{border-bottom:0}
+.toggle input{width:22px;height:22px;accent-color:var(--accent)}
+
+/* Caméra */
+.cam{position:fixed;inset:0;z-index:50;background:#000;display:flex;flex-direction:column}
+.cam video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cam .reticle{position:absolute;left:8%;right:8%;top:38%;height:22%;border:3px solid rgba(255,255,255,.85);border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,.35)}
+.cam .reticle::after{content:"";position:absolute;left:6%;right:6%;top:50%;height:2px;background:var(--signal);animation:sweep 1.6s ease-in-out infinite alternate}
+@keyframes sweep{from{transform:translateY(-34px)}to{transform:translateY(34px)}}
+@media (prefers-reduced-motion:reduce){.cam .reticle::after{animation:none}}
+.cam .bar{position:relative;display:flex;gap:10px;justify-content:space-between;align-items:center;
+  padding-top:calc(12px + env(safe-area-inset-top,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-bottom:12px;color:#fff}
+.cam .bar .btn{background:rgba(0,0,0,.55);border-color:rgba(255,255,255,.3);color:#fff}
+.cam .hud{position:relative;margin-top:auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-bottom:calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:8px}
+.cam .hud .banner{background:rgba(20,20,20,.82);color:#fff;border:0}
+.cam .hud .banner .d{color:#ddd}
+.cam .hud .banner.ok{background:rgba(29,122,70,.92);color:#fff}
+.cam .hud .banner.bad{background:rgba(180,35,24,.92);color:#fff}
+.cam .hud .banner.warn{background:rgba(154,98,18,.92);color:#fff}
+.cam .hud .banner.info{background:rgba(47,95,168,.92);color:#fff}
+.cam .flash{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .25s}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(92px + env(safe-area-inset-bottom,0px));z-index:60;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-weight:500;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.2)}
+.loading{display:flex;align-items:center;gap:12px}
+.spin{width:22px;height:22px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--accent);animation:sp 0.8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.demo-tag{font-family:var(--f-display);font-weight:700;letter-spacing:.1em;background:var(--signal);color:#1b1404;border-radius:4px;padding:1px 6px;font-size:12px}
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;color:var(--muted)}
+.steps b{color:var(--ink)}
+.barcode-ex{font-family:var(--f-mono);font-size:13px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:flex;flex-wrap:wrap;gap:4px 0;align-items:baseline}
+.barcode-ex .dim{color:var(--muted)} .barcode-ex .key{color:var(--accent);font-weight:600}
+</style>
+
+<div id="app">
+  <header class="top">
+    <div class="brand">Scan Stock<small>Lecture seule</small></div>
+    <button class="datastat" id="datastat" style="border:0;background:none;padding:0" aria-label="Données chargées">
+      <span class="txt" id="datatxt">Aucun fichier</span><span class="dot" id="datadot"></span>
+    </button>
+    <button class="iconbtn" id="btn-refresh" aria-label="Actualiser les données" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16M20 20v-4h-4"/></svg>
+    </button>
+    <button class="iconbtn" id="btn-settings" aria-label="Réglages">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+
+  <main>
+    <!-- Accueil sans données -->
+    <section class="view" id="v-load" hidden>
+      <div class="panel">
+        <h2>Charger le fichier stock</h2>
+        <p class="lead">L'appli lit une copie de votre fichier stock Excel. Elle n'écrit jamais dedans : le fichier et sa connexion au logiciel de stock restent intacts.</p>
+        <ol class="steps">
+          <li>Ouvrez le fichier sur le PC pour qu'il se mette à jour.</li>
+          <li>Mettez-en une copie accessible au téléphone : <b>OneDrive</b>, <b>iCloud</b>, mail ou dossier réseau.</li>
+          <li>Touchez <b>Choisir le fichier</b> et sélectionnez-le.</li>
+        </ol>
+        <div class="row">
+          <button class="btn primary big" id="btn-load">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 14l3-3 3 3M12 11v7"/></svg>
+            Choisir le fichier
+          </button>
+        </div>
+        <div class="loading" id="loading" hidden><div class="spin"></div><span id="loadingtxt">Lecture du fichier…</span></div>
+        <p class="hint" id="loaderr" hidden style="color:var(--bad)"></p>
+      </div>
+      <div class="panel">
+        <h3>Lecture du code-barre</h3>
+        <p class="lead">L'étiquette porte 13 chiffres. L'appli retire le premier et le dernier pour retrouver le N° de stock.</p>
+        <div class="barcode-ex"><span class="dim">1</span><span class="key">10260011464</span><span class="dim">7</span>&nbsp;&nbsp;→&nbsp;&nbsp;<span class="key">10260011464</span></div>
+        <button class="btn" id="btn-demo">Essayer avec des données de démonstration</button>
+      </div>
+    </section>
+
+    <!-- Scanner -->
+    <section class="view" id="v-scan" hidden>
+      <div class="panel">
+        <div class="scanpad" id="scanpad"></div>
+        <form class="field" id="form-scan" autocomplete="off">
+          <input class="code" id="in-scan" inputmode="numeric" placeholder="Code-barre ou N° de stock" aria-label="Code-barre ou numéro de stock">
+          <button class="btn" type="submit">OK</button>
+        </form>
+        <p class="hint" id="scanhint"></p>
+      </div>
+      <div id="scan-result"></div>
+      <div class="view" style="gap:8px">
+        <div class="row" style="align-items:center;justify-content:space-between"><h3>Derniers scans</h3><button class="btn" id="btn-clearhist" style="min-height:32px;padding:4px 10px;font-size:12.5px">Effacer</button></div>
+        <div class="list" id="hist"></div>
+      </div>
+    </section>
+
+    <!-- Recherche -->
+    <section class="view" id="v-search" hidden>
+      <div class="panel">
+        <div class="field"><input id="in-q" type="search" placeholder="Client, modèle, fournisseur, n° de commande…" aria-label="Recherche" autocomplete="off"></div>
+        <div class="row">
+          <select id="f-mag" aria-label="Magasin" style="flex:1 1 160px"></select>
+          <select id="f-etat" aria-label="État du stock" style="flex:1 1 160px"></select>
+        </div>
+      </div>
+      <p class="count" id="q-count"></p>
+      <div class="list" id="q-res"></div>
+    </section>
+
+    <!-- Inventaire -->
+    <section class="view" id="v-inv" hidden></section>
+
+    <!-- Prêts -->
+    <section class="view" id="v-pret" hidden></section>
+  </main>
+
+  <nav class="tabs" aria-label="Sections">
+    <button data-tab="scan" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>Scanner</button>
+    <button data-tab="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Recherche</button>
+    <span id="inv-badge" hidden></span>
+  </nav>
+
+  <div class="sheet" id="sheet" hidden><div class="sheet-in" id="sheet-in" role="dialog" aria-modal="true"></div></div>
+
+  <div class="cam" id="cam" hidden>
+    <video id="video" playsinline muted></video>
+    <div class="reticle"></div>
+    <div class="flash" id="flash"></div>
+    <div class="bar">
+      <button class="btn" id="cam-close">Fermer</button>
+      <span id="cam-count" class="mono" style="font-weight:600"></span>
+      <button class="btn" id="cam-torch" hidden>Lampe</button>
+    </div>
+    <div class="hud" id="cam-hud"></div>
+  </div>
+
+  <input type="file" id="file-xlsx" accept=".xlsx,.xlsm,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden>
+  <input type="file" id="file-photo" accept="image/*" capture="environment" hidden>
+  <div class="toast" id="toast" hidden role="status"></div>
+</div>
+
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="vendor/zxing.min.js"></script>
+<script src="vendor/msal-browser.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('ssgo.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('ssgo.' + k, JSON.stringify(v)); } catch (e) {} },
+  del(k) { try { localStorage.removeItem('ssgo.' + k); } catch (e) {} }
+};
+const idb = {
+  open() { return new Promise((res, rej) => { const r = indexedDB.open('scanstock-go', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  async get(k) { try { const db = await this.open(); return await new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); } catch (e) { return null; } },
+  async set(k, v) { try { const db = await this.open(); await new Promise((res, rej) => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); return true; } catch (e) { return false; } },
+  async del(k) { try { const db = await this.open(); await new Promise(res => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').delete(k); t.oncomplete = res; t.onerror = res; }); } catch (e) {} }
+};
+
+/* ---------- Réglages ---------- */
+const settings = Object.assign({ son: true, vib: true, details: true, fields: null }, store.get('settings', {}));
+if (!Array.isArray(settings.fields)) settings.fields = ['Article', 'Couleur', 'Magasin', '@dims', 'Fournisseur', 'Nom_Client', 'No_cde_client'];
+const saveSettings = () => store.set('settings', settings);
+
+/* ---------- Données ---------- */
+let D = null; // { header, rows, meta, col, idx, txt }
+const REQUIRED = ['No_Stock', 'Magasin', 'Etat_Stock'];
+
+function buildIndex(data) {
+  const col = {}; data.header.forEach((h, i) => { col[h] = i; });
+  const ns = col.No_Stock, idx = new Map();
+  const keys = ['No_Stock','Modele','Article','Fournisseur','Nom_Client','No_cde_client','Couleur','Ref_Fourn','No_BL','No_cde_fourn','Magasin','Famille','Sous_famille','Complement_Stock','Localite','No_transfert'].filter(k => k in col).map(k => col[k]);
+  const txt = new Array(data.rows.length);
+  data.rows.forEach((r, i) => {
+    const k = String(r[ns] ?? '').trim();
+    if (k && !idx.has(k)) idx.set(k, i);
+    txt[i] = norm(keys.map(c => r[c] ?? '').join(' '));
+  });
+  data.col = col; data.idx = idx; data.txt = txt;
+  // Date du mouvement le plus récent contenu dans le fichier (indice de fraîcheur)
+  let lm = 0; ['Date_Dernier_Mouvement','date_entree_initiale','Date_Cde_Clientr','Date_cde_fourn'].forEach(k => { const c = col[k]; if (c == null) return; for (const r of data.rows) { const v = r[c]; if (typeof v === 'number' && v > lm) lm = v; } });
+  data.lastMove = lm || null;
+  data.dateCols = new Set(data.header.map((h, i) => /date/i.test(h) ? i : -1).filter(i => i >= 0));
+  return data;
+}
+const V = (i, name) => { const c = D.col[name]; return c == null ? null : D.rows[i][c]; };
+const isEmpty = v => v == null || v === '' || (typeof v === 'string' && !v.trim());
+
+function fmtDate(v) {
+  if (isEmpty(v)) return '';
+  if (typeof v === 'number') { const d = new Date(Math.round((v - 25569) * 86400000)); if (isNaN(d)) return String(v); return d.toLocaleDateString('fr-FR', { timeZone: 'UTC' }); }
+  if (v instanceof Date) return v.toLocaleDateString('fr-FR');
+  return String(v);
+}
+function freshness() {
+  if (!D || D.meta.demo) return { cls: 'demo', when: null };
+  const when = D.meta.savedAt || D.meta.fileDate || D.meta.loadedAt;
+  const h = (Date.now() - when) / 3600000;
+  return { when, h, cls: h < 24 ? 'on' : h < 72 ? 'warn' : 'bad' };
+}
+const fmtDT = t => new Date(t).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+const fmtEUR = v => typeof v === 'number' ? v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) : String(v ?? '');
+function show(i, name) {
+  const v = V(i, name); if (isEmpty(v)) return '';
+  if (D.dateCols.has(D.col[name])) return fmtDate(v);
+  if (name === 'Prix_revient') return fmtEUR(v);
+  return String(v).trim();
+}
+function dims(i) {
+  const a = [V(i,'Dim_1'), V(i,'Dim_2'), V(i,'Dim_3')].map(x => Number(x) || 0);
+  if (!a.some(Boolean)) return '';
+  return a.filter(Boolean).join(' × ') + ' cm';
+}
+
+function parseWorkbook(buf) {
+  const wb = XLSX.read(buf, { type: 'array', dense: true, cellDates: false, cellFormula: false, cellHTML: false, cellStyles: false, cellText: false });
+  for (const name of wb.SheetNames) {
+    const aoa = XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: null, blankrows: false });
+    if (!aoa.length) continue;
+    const header = (aoa[0] || []).map(x => String(x ?? '').trim());
+    if (REQUIRED.every(r => header.includes(r))) {
+      const ns = header.indexOf('No_Stock');
+      const rows = aoa.slice(1).filter(r => !isEmpty(r[ns])).map(r => { r[ns] = String(r[ns]).trim(); return r; });
+      const sv = wb.Props && wb.Props.ModifiedDate ? new Date(wb.Props.ModifiedDate).getTime() : null;
+      return { header, rows, sheet: name, savedAt: isNaN(sv) ? null : sv };
+    }
+  }
+  throw new Error("Ce fichier ne contient pas les colonnes attendues (No_Stock, Magasin, Etat_Stock). Vérifiez que c'est bien le bon fichier stock.");
+}
+
+async function loadFile(file) {
+  $('#loaderr').hidden = true; $('#loading').hidden = false; $('#loadingtxt').textContent = 'Lecture de ' + file.name + '…';
+  await new Promise(r => setTimeout(r, 30));
+  try {
+    const buf = await file.arrayBuffer();
+    const p = parseWorkbook(new Uint8Array(buf));
+    const data = { header: p.header, rows: p.rows, meta: { fileName: file.name, fileDate: file.lastModified || null, savedAt: p.savedAt, loadedAt: Date.now(), demo: false, sheet: p.sheet } };
+    D = buildIndex(data);
+    const saved = await idb.set('data', { header: data.header, rows: data.rows, meta: data.meta });
+    afterData();
+    const fr = freshness();
+    toast(fr.cls === 'on' ? data.rows.length.toLocaleString('fr-FR') + ' articles chargés' + (saved ? '' : ' (non mémorisés sur ce téléphone)') : `Attention : fichier enregistré le ${fmtDT(fr.when)}. Données peut-être anciennes.`);
+  } catch (e) {
+    $('#loaderr').textContent = e && e.message ? e.message : 'Lecture impossible.'; $('#loaderr').hidden = false;
+  } finally { $('#loading').hidden = true; }
+}
+
+function demoData() {
+  const header = ['Enseigne','Socite','Magasin','Fournisseur','Modele','Article','Ref_Fourn','Categorie','Couleur','Dim_1','Dim_2','Dim_3','No_Stock','Etat_Stock','Type_Stock','date_entree_initiale','Date_Dernier_Mouvement','Prix_revient','Nature_stock','Complement_Stock','Localite','Scan_date','Famille','Sous_famille','No_cde_client','Date_Cde_Clientr','Nom_Client','BP_Cde_Client','No_BL','Date_BL','Tournee','Magasin_cde_fourn','No_cde_fourn','Date_cde_fourn','date_confirmation','Intitule_cde_fourn','No_transfert','Date_transfert','Titre_transfert1','Titre_transfert2'];
+  const mk = o => header.map(h => o[h] ?? null);
+  const base = { Enseigne:'RB', Socite:'DÉMO', Type_Stock:'D', Nature_stock:'STOCK', date_entree_initiale:46200, Date_Dernier_Mouvement:46280 };
+  const rows = [
+    mk({...base, Magasin:'Magasin Démo A', Fournisseur:'ATELIER EXEMPLE', Modele:'CANAPÉ LUMA', Article:'CANAPÉ 3 PLACES', Categorie:'TISSU', Couleur:'GRIS PERLE', Dim_1:220, Dim_2:95, Dim_3:82, No_Stock:'10269990001', Etat_Stock:'Disponible', Prix_revient:1450, Famille:'CANAPES'}),
+    mk({...base, Magasin:'Magasin Démo A', Fournisseur:'ATELIER EXEMPLE', Modele:'FAUTEUIL ORBE', Article:'FAUTEUIL', Categorie:'CUIR', Couleur:'COGNAC', No_Stock:'10269990002', Etat_Stock:'Réservé', Prix_revient:690, Famille:'FAUTEUILS', No_cde_client:'DEMO-0001', Date_Cde_Clientr:46290, Nom_Client:'CLIENT DÉMO 1', Tournee:'1DEMO'}),
+    mk({...base, Magasin:'Magasin Démo A', Fournisseur:'MAISON TEST', Modele:'TABLE BASSE PLANE', Article:'TABLE BASSE', Categorie:'CÉRAMIQUE', Couleur:'BEIGE', Dim_1:120, Dim_2:60, Dim_3:38, No_Stock:'10269990003', Etat_Stock:'Disponible', Type_Stock:'P', Prix_revient:410, Famille:'TABLES BASSES'}),
+    mk({...base, Magasin:'Magasin Démo A', Fournisseur:'MAISON TEST', Modele:'LAMPE HALO', Article:'LAMPADAIRE', Couleur:'LAITON', No_Stock:'10269990004', Etat_Stock:'Disponible', Prix_revient:120, Famille:'LUMINAIRES'}),
+    mk({...base, Magasin:'Magasin Démo A', Fournisseur:'ATELIER EXEMPLE', Modele:'CANAPÉ LUMA', Article:'MÉRIDIENNE', Categorie:'TISSU', Couleur:'GRIS PERLE', No_Stock:'10269990005', Etat_Stock:'En commande', Prix_revient:980, Famille:'CANAPES', No_cde_fourn:'900001', Date_cde_fourn:46270, Intitule_cde_fourn:'COMMANDE DE STOCK (DÉMO)'}),
+    mk({...base, Magasin:'Magasin Démo A', Fournisseur:'ATELIER EXEMPLE', Modele:'CANAPÉ NIDO', Article:'CANAPÉ 2 PLACES', Couleur:'VERT SAUGE', No_Stock:'10269990006', Etat_Stock:'Disponible', Nature_stock:'PRET', Localite:'Prêt Événement démo', Prix_revient:1200, Famille:'CANAPES'}),
+    mk({...base, Enseigne:'CC', Magasin:'Magasin Démo B', Fournisseur:'MAISON TEST', Modele:'CHAISE DUO', Article:'CHAISE', Couleur:'NOIR', No_Stock:'10269990007', Etat_Stock:'Disponible', Prix_revient:85, Famille:'CHAISES'}),
+    mk({...base, Enseigne:'CC', Magasin:'Magasin Démo B', Fournisseur:'MAISON TEST', Modele:'TAPIS DUNE', Article:'TAPIS', Couleur:'SABLE', Dim_1:200, Dim_2:300, No_Stock:'10269990008', Etat_Stock:'Livraison en cours', Prix_revient:260, Famille:'TAPIS', No_cde_client:'DEMO-0002', Nom_Client:'CLIENT DÉMO 2', No_BL:'BL-DEMO-1', Date_BL:46300, Tournee:'2DEMO'})
+  ];
+  D = buildIndex({ header, rows, meta: { fileName: 'Données de démonstration', fileDate: null, loadedAt: Date.now(), demo: true } });
+  afterData();
+  toast('Démo chargée. Essayez le code 1102699900015');
+}
+
+/* ---------- Codes-barres ---------- */
+function parseCode(raw) {
+  const s = String(raw ?? '').trim();
+  const up = s.toUpperCase();
+  if (/^Z[A-Z0-9]{0,4}-/.test(up)) return { kind: 'zone', value: up };
+  if (/^PR[EÊ]T/i.test(s)) return { kind: 'pret', value: s };
+  const d = s.replace(/\D/g, '');
+  if (d.length && d.length === s.replace(/[\s-]/g, '').length) {
+    if (d.length === 13) return { kind: 'item', value: d.slice(1, 12), raw: d };
+    if (d.length === 12) return { kind: 'item', value: d.slice(0, 11), raw: d }; // EAN-13 commençant par 0 lu comme UPC-A
+    if (d.length === 11) return { kind: 'item', value: d, raw: d };
+  }
+  return { kind: 'unknown', value: s };
+}
+
+let zxReaderFast = null, zxReaderHard = null, barcodeDet = null;
+function zx(hard) {
+  if (!window.ZXing) return null;
+  if (hard ? zxReaderHard : zxReaderFast) return hard ? zxReaderHard : zxReaderFast;
+  const r = new ZXing.MultiFormatReader(); const h = new Map(); const F = ZXing.BarcodeFormat;
+  h.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [F.EAN_13, F.EAN_8, F.UPC_A, F.CODE_128, F.CODE_39, F.ITF, F.QR_CODE]);
+  if (hard) h.set(ZXing.DecodeHintType.TRY_HARDER, true);
+  r.setHints(h);
+  if (hard) zxReaderHard = r; else zxReaderFast = r;
+  return r;
+}
+async function getDetector() {
+  if (barcodeDet !== null) return barcodeDet || null;
+  barcodeDet = false;
+  try {
+    if ('BarcodeDetector' in window) {
+      const want = ['ean_13','ean_8','upc_a','code_128','code_39','itf','qr_code'];
+      const sup = await BarcodeDetector.getSupportedFormats();
+      const f = want.filter(x => sup.includes(x));
+      if (f.length) barcodeDet = new BarcodeDetector({ formats: f });
+    }
+  } catch (e) { barcodeDet = false; }
+  return barcodeDet || null;
+}
+async function detectCanvas(cv, hard) {
+  const det = await getDetector();
+  if (det) { try { const r = await det.detect(cv); if (r && r.length) return r[0].rawValue; } catch (e) {} }
+  const reader = zx(hard); if (!reader) return null;
+  for (const Bin of [ZXing.HybridBinarizer, ZXing.GlobalHistogramBinarizer]) {
+    try { const src = new ZXing.HTMLCanvasElementLuminanceSource(cv); return reader.decode(new ZXing.BinaryBitmap(new Bin(src))).getText(); } catch (e) {}
+    if (!hard) break;
+  }
+  return null;
+}
+async function loadImage(file) {
+  if (window.createImageBitmap) { try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) {} }
+  return await new Promise((res, rej) => { const img = new Image(); img.onload = () => res(img); img.onerror = rej; img.src = URL.createObjectURL(file); });
+}
+async function decodeImageFile(file) {
+  const img = await loadImage(file);
+  const W = img.width, H = img.height;
+  const cv = document.createElement('canvas'), g = cv.getContext('2d', { willReadFrequently: true });
+  for (const [max, rot] of [[1600,0],[1000,0],[2400,0],[1600,90]]) {
+    const s = Math.min(1, max / Math.max(W, H));
+    const w = Math.round(W * s), h = Math.round(H * s);
+    if (rot) { cv.width = h; cv.height = w; } else { cv.width = w; cv.height = h; }
+    g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); // images à fond transparent (captures d'écran)
+    if (rot) { g.save(); g.translate(h / 2, w / 2); g.rotate(Math.PI / 2); g.drawImage(img, -w / 2, -h / 2, w, h); g.restore(); }
+    else g.drawImage(img, 0, 0, w, h);
+    const r = await detectCanvas(cv, true);
+    if (r) return r;
+  }
+  return null;
+}
+
+/* ---------- Retour sonore / vibration ---------- */
+let actx = null;
+function ensureAudio() { try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) {} }
+function beep(freq, dur, when = 0) {
+  if (!actx) return;
+  try { const o = actx.createOscillator(), g = actx.createGain(); o.type = 'square'; o.frequency.value = freq; g.gain.value = 0.06; o.connect(g); g.connect(actx.destination); const t = actx.currentTime + when; o.start(t); o.stop(t + dur); } catch (e) {}
+}
+function feedback(kind) {
+  if (settings.son) { if (kind === 'ok') beep(1760, .09); else if (kind === 'zone') { beep(1320, .07); beep(1760, .07, .1); } else if (kind === 'warn') { beep(660, .12); } else { beep(330, .16); beep(330, .16, .22); } }
+  if (settings.vib && navigator.vibrate) { try { navigator.vibrate(kind === 'ok' ? 40 : kind === 'zone' ? [30, 50, 30] : [120, 60, 120]); } catch (e) {} }
+  const fl = $('#flash'); if (!$('#cam').hidden) { fl.style.background = kind === 'ok' ? 'rgba(29,122,70,.35)' : kind === 'zone' ? 'rgba(47,95,168,.35)' : kind === 'warn' ? 'rgba(227,162,26,.35)' : 'rgba(180,35,24,.4)'; fl.style.opacity = 1; setTimeout(() => fl.style.opacity = 0, 220); }
+}
+let toastT = 0;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2600); }
+
+/* ---------- Caméra ---------- */
+const inFrame = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+const liveOK = !inFrame && window.isSecureContext && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+let stream = null, scanning = false, camCtx = 'scan', lastLive = { code: '', t: 0 }, wakeLock = null;
+const liveCv = document.createElement('canvas'), liveG = liveCv.getContext('2d', { willReadFrequently: true });
+
+async function startLive(ctx) {
+  ensureAudio(); camCtx = ctx; lastLive = { code: '', t: 0 };
+  $('#cam').hidden = false; renderCamHud();
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
+    const v = $('#video'); v.srcObject = stream; await v.play();
+    const track = stream.getVideoTracks()[0];
+    try { const caps = track.getCapabilities ? track.getCapabilities() : {}; $('#cam-torch').hidden = !caps.torch; if (caps.focusMode && caps.focusMode.includes('continuous')) track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {}); } catch (e) {}
+    try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+    scanning = true; tick();
+  } catch (e) {
+    stopLive(); toast("Caméra indisponible. Utilisez le mode photo.");
+  }
+}
+function stopLive() {
+  scanning = false;
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  try { wakeLock && wakeLock.release(); } catch (e) {} wakeLock = null;
+  $('#cam').hidden = true; torchOn = false;
+}
+async function tick() {
+  if (!scanning) return;
+  const v = $('#video');
+  if (v.readyState >= 2 && v.videoWidth) {
+    // Zone centrale (là où se trouve le cadre de visée) : plus rapide et plus fiable que l'image entière.
+    const W = v.videoWidth, H = v.videoHeight;
+    const sx = W * 0.04, sw = W * 0.92, sy = H * 0.28, sh = H * 0.44;
+    const s = Math.min(1, 1280 / sw);
+    liveCv.width = Math.round(sw * s); liveCv.height = Math.round(sh * s);
+    liveG.drawImage(v, sx, sy, sw, sh, 0, 0, liveCv.width, liveCv.height);
+    frameN = (frameN + 1) % 4;
+    const code = await detectCanvas(liveCv, frameN === 0);
+    if (code && scanning) onLive(code);
+  }
+  setTimeout(tick, 120);
+}
+let frameN = 0;
+function onLive(code) {
+  const now = Date.now();
+  if (code === lastLive.code && now - lastLive.t < 2500) return;
+  lastLive = { code, t: now };
+  if (camCtx === 'scan') { stopLive(); handleScan(code); }
+  else { invScan(code); renderCamHud(); }
+}
+let torchOn = false;
+$('#cam-torch').onclick = async () => { try { torchOn = !torchOn; await stream.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: torchOn }] }); } catch (e) { toast('Lampe indisponible'); } };
+$('#cam-close').onclick = () => { stopLive(); render(); };
+
+let photoCtx = 'scan';
+function openPhoto(ctx) { ensureAudio(); photoCtx = ctx; const f = $('#file-photo'); f.value = ''; f.click(); }
+$('#file-photo').addEventListener('change', async e => {
+  const file = e.target.files && e.target.files[0]; if (!file) return;
+  toast('Lecture du code-barre…');
+  let code = null;
+  try { code = await decodeImageFile(file); } catch (err) {}
+  if (!code) { feedback('bad'); toast("Aucun code-barre lu. Reprenez la photo plus près, bien à plat et nette."); return; }
+  if (photoCtx === 'inv') invScan(code); else handleScan(code);
+});
+
+function scanButtons(ctx) {
+  const camIco = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>';
+  const phIco = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></svg>';
+  if (liveOK) return `<button class="btn primary big" data-live="${ctx}">${camIco}${ctx === 'inv' ? 'Biper en continu' : 'Scanner'}</button><button class="btn big" data-photo="${ctx}" aria-label="Scanner par photo">${phIco}</button>`;
+  return `<button class="btn primary big" data-photo="${ctx}" style="grid-column:1/-1">${phIco}Scanner (photo)</button>`;
+}
+document.addEventListener('click', e => {
+  const l = e.target.closest('[data-live]'); if (l) { startLive(l.dataset.live); return; }
+  const p = e.target.closest('[data-photo]'); if (p) { openPhoto(p.dataset.photo); return; }
+  const f = e.target.closest('[data-fiche]'); if (f) { openFiche(+f.dataset.fiche); return; }
+});
+
+/* ---------- Fiche article ---------- */
+const ETAT_CLS = { 'Disponible': 'ok', 'Réservé': 'info', 'Livraison en cours': 'info', 'En commande': 'warn', 'A commander': 'warn', 'Bon inter magasins en cours': 'warn' };
+const ETAT_VAR = { ok: 'var(--ok)', info: 'var(--info)', warn: 'var(--warn)', bad: 'var(--bad)' };
+const GROUPS = [
+  ['Article', [['Enseigne'],['Magasin'],['Fournisseur'],['Ref_Fourn','Réf. fournisseur'],['Categorie','Catégorie'],['Couleur'],['Complement_Stock','Complément'],['@dims','Dimensions'],['Famille'],['Sous_famille','Sous-famille'],['Socite','Société']]],
+  ['Stock', [['Type_Stock','Type de stock'],['Nature_stock','Nature'],['Localite','Localité'],['date_entree_initiale','Entrée initiale'],['Date_Dernier_Mouvement','Dernier mouvement'],['Scan_date','Dernier scan'],['Prix_revient','Prix de revient']]],
+  ['Commande client', [['Nom_Client','Client'],['No_cde_client','N° commande'],['Date_Cde_Clientr','Date commande'],['BP_Cde_Client','BP'],['No_BL','N° BL'],['Date_BL','Date BL'],['Tournee','Tournée']]],
+  ['Commande fournisseur', [['No_cde_fourn','N° commande'],['Date_cde_fourn','Date'],['date_confirmation','Confirmation'],['Magasin_cde_fourn','Magasin'],['Intitule_cde_fourn','Intitulé']]],
+  ['Transfert', [['No_transfert','N° transfert'],['Date_transfert','Date'],['Titre_transfert1','Titre'],['Titre_transfert2','Suite']]]
+];
+/* Catalogue des infos qu'on peut choisir d'afficher après un scan (libellés uniques). */
+const FIELD_LABELS = {
+  Article:'Article', Couleur:'Couleur', Magasin:'Magasin', '@dims':'Dimensions', Fournisseur:'Fournisseur', Ref_Fourn:'Réf. fournisseur',
+  Categorie:'Catégorie', Complement_Stock:'Complément', Famille:'Famille', Sous_famille:'Sous-famille', Enseigne:'Enseigne', Socite:'Société',
+  Type_Stock:'Type de stock', Nature_stock:'Nature du stock', Localite:'Localité', date_entree_initiale:'Entrée initiale', Date_Dernier_Mouvement:'Dernier mouvement',
+  Scan_date:'Dernier scan', Prix_revient:'Prix de revient',
+  Nom_Client:'Client', No_cde_client:'N° cde client', Date_Cde_Clientr:'Date cde client', BP_Cde_Client:'BP client', No_BL:'N° BL', Date_BL:'Date BL', Tournee:'Tournée',
+  No_cde_fourn:'N° cde fournisseur', Date_cde_fourn:'Date cde fournisseur', date_confirmation:'Confirmation fournisseur', Magasin_cde_fourn:'Magasin cde fournisseur', Intitule_cde_fourn:'Intitulé cde fournisseur',
+  No_transfert:'N° transfert', Date_transfert:'Date transfert', Titre_transfert1:'Titre transfert', Titre_transfert2:'Titre transfert (suite)'
+};
+const DEFAULT_FIELDS = ['Article', 'Couleur', 'Magasin', '@dims', 'Fournisseur', 'Nom_Client', 'No_cde_client'];
+const fieldVal = (i, k) => k === '@dims' ? dims(i) : show(i, k);
+const monoKey = k => /No_|Ref_|BP_/.test(k);
+function etatPill(i) { const e = show(i, 'Etat_Stock'); return e ? `<span class="pill ${ETAT_CLS[e] || ''}">${esc(e)}</span>` : ''; }
+function ficheHTML(i) {
+  const e = show(i, 'Etat_Stock'), cls = ETAT_CLS[e] || '';
+  const nat = show(i, 'Nature_stock');
+  let h = `<article class="fiche" style="--st:${ETAT_VAR[cls] || 'var(--muted)'}"><div class="fiche-head">
+    <div class="fiche-top"><span class="ns">${esc(show(i,'No_Stock'))}</span>${etatPill(i)}${nat && nat !== 'STOCK' ? `<span class="pill bad">${esc(nat)}</span>` : ''}</div>
+    <div class="modele">${esc(show(i,'Modele') || show(i,'Article') || 'Sans libellé')}</div>
+  </div>`;
+  const key = settings.fields.map(k => { const v = fieldVal(i, k); return v ? `<dt>${esc(FIELD_LABELS[k] || k)}</dt><dd${monoKey(k) ? ' class="mono"' : ''}>${esc(v)}</dd>` : ''; }).join('');
+  if (key) h += `<section class="sec key"><dl>${key}</dl></section>`;
+  if (settings.details) {
+    h += `<details class="more"><summary>Tous les détails</summary>`;
+    for (const [title, fields] of GROUPS) {
+      const items = fields.map(([k, label]) => {
+        if (k === 'Prix_revient' && !settings.fields.includes('Prix_revient')) return null;
+        const v = fieldVal(i, k);
+        return v ? `<dt>${esc(label || k)}</dt><dd${monoKey(k) ? ' class="mono"' : ''}>${esc(v)}</dd>` : null;
+      }).filter(Boolean);
+      if (items.length) h += `<section class="sec"><h3>${title}</h3><dl>${items.join('')}</dl></section>`;
+    }
+    h += '</details>';
+  }
+  return h + '</article>';
+}
+function openFiche(i) { openSheet('Fiche article', ficheHTML(i)); }
+
+/* ---------- Feuille ---------- */
+let sheetOnClose = null;
+function openSheet(title, html, onClose) {
+  $('#sheet-in').innerHTML = `<div class="sheet-bar"><h3>${esc(title)}</h3><button class="btn" id="sheet-close" style="min-height:38px">Fermer</button></div>${html}`;
+  $('#sheet').hidden = false; sheetOnClose = onClose || null;
+  $('#sheet-close').onclick = closeSheet;
+}
+function closeSheet() { $('#sheet').hidden = true; $('#sheet-in').innerHTML = ''; if (sheetOnClose) { const f = sheetOnClose; sheetOnClose = null; f(); } }
+$('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (!$('#cam').hidden) stopLive(); else if (!$('#sheet').hidden) closeSheet(); } });
+
+/* ---------- Vue Scanner ---------- */
+let hist = store.get('hist', []);
+function handleScan(raw) {
+  autoRefresh();
+  const c = parseCode(raw);
+  const out = $('#scan-result');
+  if (tab !== 'scan') setTab('scan');
+  if (c.kind === 'item') {
+    const i = D ? D.idx.get(c.value) : undefined;
+    hist = [{ ns: c.value, t: Date.now() }, ...hist.filter(h => h.ns !== c.value)].slice(0, 25); store.set('hist', hist);
+    if (i == null) { feedback('bad'); out.innerHTML = `<div class="notfound"><b>Introuvable</b><span>N° de stock <span class="mono">${esc(c.value)}</span> absent du fichier chargé.${c.raw && c.raw !== c.value ? ` Code lu : <span class="mono">${esc(c.raw)}</span>.` : ''}</span></div>`; }
+    else { feedback('ok'); lastFicheNs = c.value; out.innerHTML = ficheHTML(i); }
+    renderHist();
+  } else if (c.kind === 'zone') { feedback('zone'); out.innerHTML = `<div class="banner info"><span class="k">Code zone</span><span class="d">${esc(c.value)}. Les zones servent dans l'onglet Inventaire.</span></div>`; }
+  else if (c.kind === 'pret') { feedback('zone'); out.innerHTML = `<div class="banner info"><span class="k">Code prêt</span><span class="d">${esc(c.value)}</span></div>`; }
+  else { feedback('bad'); out.innerHTML = `<div class="notfound"><b>Code non reconnu</b><span class="mono">${esc(c.value)}</span><span>Attendu : 13 chiffres (étiquette) ou 11 chiffres (N° de stock).</span></div>`; }
+  out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function renderHist() {
+  const el = $('#hist');
+  if (!hist.length) { el.innerHTML = '<div class="empty">Les articles scannés apparaîtront ici.</div>'; return; }
+  el.innerHTML = hist.map(h => {
+    const i = D && D.idx.get(h.ns);
+    const t = new Date(h.t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    if (i == null) return `<div class="item"><span class="t mono">${esc(h.ns)}</span><span class="m">Introuvable · ${t}</span><span class="r"><span class="pill bad">?</span></span></div>`;
+    return `<button class="item" data-fiche="${i}"><span class="t">${esc(show(i,'Modele') || show(i,'Article'))}</span><span class="m"><span class="mono">${esc(h.ns)}</span> · ${esc(show(i,'Magasin'))} · ${t}</span><span class="r">${etatPill(i)}</span></button>`;
+  }).join('');
+}
+$('#btn-clearhist').onclick = () => { hist = []; store.set('hist', hist); renderHist(); };
+$('#form-scan').addEventListener('submit', e => { e.preventDefault(); ensureAudio(); const v = $('#in-scan').value.trim(); if (!v) return; $('#in-scan').value = ''; handleScan(v); });
+
+/* ---------- Recherche ---------- */
+function fillFilters() {
+  const mags = new Map(), etats = new Map();
+  const cm = D.col.Magasin, ce = D.col.Etat_Stock;
+  for (const r of D.rows) { mags.set(r[cm], (mags.get(r[cm]) || 0) + 1); etats.set(r[ce], (etats.get(r[ce]) || 0) + 1); }
+  const opt = (m, all) => `<option value="">${all}</option>` + [...m.entries()].filter(([k]) => !isEmpty(k)).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<option value="${esc(k)}">${esc(k)} (${n.toLocaleString('fr-FR')})</option>`).join('');
+  $('#f-mag').innerHTML = opt(mags, 'Tous les magasins'); $('#f-etat').innerHTML = opt(etats, 'Tous les états');
+}
+let qT = 0;
+function runSearch() {
+  if (!D) return;
+  if (document.activeElement && document.activeElement.id === 'in-q') autoRefresh();
+  const q = norm($('#in-q').value).split(/\s+/).filter(Boolean), m = $('#f-mag').value, et = $('#f-etat').value;
+  const res = $('#q-res'), cnt = $('#q-count');
+  if (!q.length && !m && !et) { cnt.textContent = ''; res.innerHTML = '<div class="empty">Tapez un nom de client, un modèle, un fournisseur, un n° de commande ou de BL. Plusieurs mots se combinent, par exemple « canape cuir ». Utilisez les filtres pour le magasin et l’état.</div>'; return; }
+  const cm = D.col.Magasin, ce = D.col.Etat_Stock, out = [];
+  let n = 0;
+  for (let i = 0; i < D.rows.length; i++) {
+    const r = D.rows[i];
+    if (m && r[cm] !== m) continue; if (et && r[ce] !== et) continue;
+    const t = D.txt[i]; if (!q.every(w => t.includes(w))) continue;
+    n++; if (out.length < 80) out.push(i);
+  }
+  cnt.textContent = n ? `${n.toLocaleString('fr-FR')} résultat${n > 1 ? 's' : ''}${n > 80 ? ' · 80 premiers affichés, affinez la recherche' : ''}` : '';
+  res.innerHTML = out.length ? out.map(i => `<button class="item" data-fiche="${i}"><span class="t">${esc(show(i,'Modele') || show(i,'Article'))}</span><span class="m"><span class="mono">${esc(show(i,'No_Stock'))}</span> · ${esc(show(i,'Magasin'))}${show(i,'Nom_Client') ? ' · ' + esc(show(i,'Nom_Client')) : ''}</span><span class="r">${etatPill(i)}</span></button>`).join('') : '<div class="empty">Aucun article ne correspond.</div>';
+}
+$('#in-q').addEventListener('input', () => { clearTimeout(qT); qT = setTimeout(runSearch, 150); });
+$('#f-mag').addEventListener('change', runSearch); $('#f-etat').addEventListener('change', runSearch);
+
+/* ---------- Inventaire ---------- */
+const PHYS_DEFAULT = ['Disponible', 'Réservé', 'Livraison en cours', 'Bon inter magasins en cours'];
+let INV = store.get('inv', null);
+let invList = 'last', invExpCache = null, invLast = null, invConfirm = false;
+const saveInv = () => { store.set('inv', INV); invExpCache = null; };
+function invExpected() {
+  if (invExpCache) return invExpCache;
+  const set = new Set(); if (!INV || !D) return set;
+  const cm = D.col.Magasin, ce = D.col.Etat_Stock, ct = D.col.Type_Stock;
+  const sites = new Set(INV.sites), etats = new Set(INV.etats);
+  D.rows.forEach((r, i) => { if (sites.has(r[cm]) && etats.has(r[ce]) && (INV.type === 'all' || r[ct] === INV.type)) set.add(i); });
+  return invExpCache = set;
+}
+function invClass(ns) {
+  const i = D.idx.get(ns);
+  if (i == null) return { cls: 'inconnu' };
+  if (invExpected().has(i)) return { cls: 'ok', i };
+  if (INV.sites.includes(V(i, 'Magasin'))) return { cls: 'hors', i };
+  return { cls: 'autre', i };
+}
+function invStats() {
+  const exp = invExpected(), seen = new Set(), buckets = { ok: [], trop: [], inconnu: [] };
+  for (const s of INV.scans) {
+    const c = invClass(s.ns); s._c = c;
+    if (c.cls === 'ok') { buckets.ok.push(s); seen.add(c.i); }
+    else if (c.cls === 'inconnu') buckets.inconnu.push(s);
+    else buckets.trop.push(s);
+  }
+  const missing = [...exp].filter(i => !seen.has(i));
+  return { exp, buckets, missing };
+}
+function invLabel(c) {
+  if (c.cls === 'ok') return ['ok', 'Attendu', 'Bien à sa place'];
+  if (c.cls === 'hors') return ['warn', 'Hors attendu', `Même site, mais ${show(c.i,'Etat_Stock') || 'état'}${INV.type !== 'all' ? ' / type ' + (show(c.i,'Type_Stock') || '?') : ''}`];
+  if (c.cls === 'autre') return ['bad', 'Autre site', show(c.i, 'Magasin')];
+  return ['bad', 'Absent du fichier', "N° inconnu dans l'extraction"];
+}
+function invScan(raw) {
+  if (!INV) { toast("Démarrez d'abord un inventaire."); return; }
+  const c = parseCode(raw);
+  if (c.kind === 'zone') { INV.zone = c.value; saveInv(); feedback('zone'); invLast = { tone: 'info', k: 'Zone ' + c.value, d: 'Les prochains articles seront rattachés à cette zone.' }; renderInv(); return; }
+  if (c.kind !== 'item') { feedback('bad'); invLast = { tone: 'bad', k: 'Code non reconnu', d: c.value }; renderInv(); return; }
+  const dup = INV.scans.find(s => s.ns === c.value);
+  if (dup) { feedback('warn'); invLast = { tone: 'warn', k: 'Déjà bipé', d: `${c.value} · ${dup.zone ? 'zone ' + dup.zone + ' · ' : ''}${new Date(dup.t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` }; renderInv(); return; }
+  INV.scans.push({ ns: c.value, raw: c.raw || c.value, zone: INV.zone || '', t: Date.now() }); saveInv();
+  const cl = invClass(c.value), [tone, k, d] = invLabel(cl);
+  feedback(tone === 'ok' ? 'ok' : tone === 'warn' ? 'warn' : 'bad');
+  invLast = { tone, k, d: `${c.value}${cl.i != null ? ' · ' + (show(cl.i,'Modele') || show(cl.i,'Article')) : ''} — ${d}`, i: cl.i };
+  renderInv();
+}
+function renderInvSetup(el) {
+  const cm = D.col.Magasin, ce = D.col.Etat_Stock;
+  const mags = new Map(), etats = new Map();
+  for (const r of D.rows) { mags.set(r[cm], (mags.get(r[cm]) || 0) + 1); etats.set(r[ce], (etats.get(r[ce]) || 0) + 1); }
+  const prev = store.get('invprefs', { sites: [], type: 'all', etats: PHYS_DEFAULT });
+  const chk = (name, m, sel) => [...m.entries()].filter(([k]) => !isEmpty(k)).sort((a, b) => String(a[0]).localeCompare(String(b[0]), 'fr')).map(([k, n], j) =>
+    `<label class="check"><input type="checkbox" name="${name}" value="${esc(k)}" ${sel.includes(k) ? 'checked' : ''}><span>${esc(k)}</span><em>${n.toLocaleString('fr-FR')}</em></label>`).join('');
+  el.innerHTML = `
+    <div class="panel"><h2>Nouvel inventaire</h2><p class="lead">Choisissez ce qui doit être présent physiquement. Pour un dépôt commun, cochez tous les magasins qu'il stocke.</p></div>
+    <div class="panel"><h3>Sites à inventorier</h3><div class="checks">${chk('site', mags, prev.sites)}</div></div>
+    <div class="panel"><h3>Type de stock</h3>
+      <div class="seg" id="seg-type">${['all','P','D'].map(t => `<button type="button" data-t="${t}" aria-pressed="${prev.type === t}">${t === 'all' ? 'Tous' : t}</button>`).join('')}</div>
+      <p class="hint">P et D sont les valeurs de la colonne Type_Stock du fichier.</p></div>
+    <div class="panel"><h3>États attendus en physique</h3><div class="checks">${chk('etat', etats, prev.etats)}</div>
+      <p class="hint">Par défaut, « En commande » et « A commander » sont exclus : ces articles ne sont pas encore arrivés.</p></div>
+    <button class="btn primary big full" id="inv-start">Démarrer l'inventaire</button>
+    <p class="hint" id="inv-err" style="color:var(--bad)" hidden>Cochez au moins un site et un état.</p>`;
+  let type = prev.type;
+  el.querySelectorAll('#seg-type button').forEach(b => b.onclick = () => { type = b.dataset.t; el.querySelectorAll('#seg-type button').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+  $('#inv-start').onclick = () => {
+    const sites = [...el.querySelectorAll('input[name=site]:checked')].map(x => x.value);
+    const ets = [...el.querySelectorAll('input[name=etat]:checked')].map(x => x.value);
+    if (!sites.length || !ets.length) { $('#inv-err').hidden = false; return; }
+    store.set('invprefs', { sites, type, etats: ets });
+    INV = { sites, type, etats: ets, zone: '', scans: [], started: Date.now(), source: D.meta.fileName, demo: !!D.meta.demo }; invLast = null; invList = 'last'; saveInv(); renderInv();
+  };
+}
+function renderInv() {
+  const el = $('#v-inv');
+  updateBadge();
+  if (!D) return;
+  if (!INV) { renderInvSetup(el); return; }
+  const st = invStats(), nExp = st.exp.size, nOk = st.buckets.ok.length;
+  const pct = nExp ? Math.min(100, Math.round(nOk / nExp * 100)) : 0;
+  const line = (s) => {
+    const c = s._c, [tone, k] = invLabel(c), t = new Date(s.t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const main = c.i != null ? esc(show(c.i,'Modele') || show(c.i,'Article')) : `<span class="mono">${esc(s.ns)}</span>`;
+    const meta = `${c.i != null ? `<span class="mono">${esc(s.ns)}</span> · ` : ''}${s.zone ? esc(s.zone) + ' · ' : ''}${c.cls === 'autre' ? esc(show(c.i,'Magasin')) + ' · ' : ''}${t}`;
+    return `<div class="item"${c.i != null ? ` data-fiche="${c.i}" role="button" tabindex="0"` : ''}><span class="t">${main}</span><span class="m">${meta}</span><span class="r"><span class="pill ${tone}">${k}</span><button class="x" data-del="${esc(s.ns)}" aria-label="Retirer ce scan">✕</button></span></div>`;
+  };
+  let listHTML = '';
+  if (invList === 'last') listHTML = INV.scans.length ? [...INV.scans].reverse().slice(0, 100).map(line).join('') : '<div class="empty">Bipez un article ou un code zone (code zone) pour commencer.</div>';
+  else if (invList === 'missing') listHTML = st.missing.length ? st.missing.slice(0, 300).map(i => `<button class="item" data-fiche="${i}"><span class="t">${esc(show(i,'Modele') || show(i,'Article'))}</span><span class="m"><span class="mono">${esc(show(i,'No_Stock'))}</span> · ${esc(show(i,'Magasin'))}${show(i,'Nom_Client') ? ' · ' + esc(show(i,'Nom_Client')) : ''}</span><span class="r">${etatPill(i)}</span></button>`).join('') + (st.missing.length > 300 ? `<div class="empty">… et ${st.missing.length - 300} autres, tous présents dans l'export.</div>` : '') : '<div class="empty">Aucun manquant.</div>';
+  else if (invList === 'trop') listHTML = st.buckets.trop.length ? st.buckets.trop.slice().reverse().map(line).join('') : '<div class="empty">Aucun article en trop.</div>';
+  else listHTML = st.buckets.inconnu.length ? st.buckets.inconnu.slice().reverse().map(line).join('') : '<div class="empty">Aucun code inconnu.</div>';
+  const titles = { last: 'Derniers bipés', missing: 'Manquants : attendus, pas encore bipés', trop: 'En trop : bipés mais non attendus ici', inconnu: 'Inconnus : absents du fichier' };
+  el.innerHTML = `
+    <div class="panel">
+      <div class="row" style="justify-content:space-between;align-items:baseline"><h2>Inventaire</h2><span class="count">${esc(INV.sites.join(' · '))}${INV.type !== 'all' ? ' · type ' + INV.type : ''}</span></div>
+      <div class="progress" aria-label="Avancement"><i style="width:${pct}%"></i></div>
+      <div class="row" style="justify-content:space-between"><span class="count mono">${nOk.toLocaleString('fr-FR')} / ${nExp.toLocaleString('fr-FR')} attendus</span><span class="count mono">${pct} %</span></div>
+    </div>
+    <div class="tiles">
+      <button class="tile ok ${invList === 'last' ? 'on' : ''}" data-list="last"><b>${INV.scans.length}</b><span>Bipés</span></button>
+      <button class="tile warn ${invList === 'missing' ? 'on' : ''}" data-list="missing"><b>${st.missing.length}</b><span>Manquants</span></button>
+      <button class="tile bad ${invList === 'trop' ? 'on' : ''}" data-list="trop"><b>${st.buckets.trop.length}</b><span>En trop</span></button>
+      <button class="tile bad ${invList === 'inconnu' ? 'on' : ''}" data-list="inconnu"><b>${st.buckets.inconnu.length}</b><span>Inconnus</span></button>
+    </div>
+    <div class="panel">
+      <div class="zone"><span class="lbl">Zone</span><span class="val" id="zone-val">${esc(INV.zone || 'aucune')}</span><button class="btn" id="zone-edit" style="min-height:34px;padding:4px 10px">Changer</button></div>
+      <div class="scanpad">${scanButtons('inv')}</div>
+      <form class="field" id="form-inv" autocomplete="off"><input class="code" id="in-inv" inputmode="numeric" placeholder="Code-barre, N° de stock ou code zone" aria-label="Code à biper"><button class="btn" type="submit">OK</button></form>
+      ${invLast ? `<div class="banner ${invLast.tone}"><span class="k">${esc(invLast.k)}</span><span class="d">${esc(invLast.d)}</span></div>` : ''}
+    </div>
+    <div class="view" style="gap:8px"><h3>${titles[invList]}</h3><div class="list" id="inv-list">${listHTML}</div></div>
+    <div class="row">
+      <button class="btn primary" id="inv-export">Exporter les écarts (.xlsx)</button>
+      <button class="btn" id="inv-undo" ${INV.scans.length ? '' : 'disabled'}>Annuler le dernier scan</button>
+      <button class="btn danger" id="inv-end">${invConfirm ? 'Confirmer : effacer cet inventaire' : 'Terminer l’inventaire'}</button>
+    </div>
+    <p class="hint">Inventaire démarré le ${new Date(INV.started).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}, sauvegardé sur ce téléphone au fil des scans. Fichier source : ${esc(INV.source || '')}.</p>`;
+  el.querySelectorAll('[data-list]').forEach(b => b.onclick = () => { invList = b.dataset.list; renderInv(); });
+  el.querySelectorAll('[data-del]').forEach(b => b.onclick = ev => { ev.stopPropagation(); INV.scans = INV.scans.filter(s => s.ns !== b.dataset.del); saveInv(); renderInv(); });
+  $('#form-inv').addEventListener('submit', ev => { ev.preventDefault(); ensureAudio(); const v = $('#in-inv').value.trim(); $('#in-inv').value = ''; if (v) invScan(v); setTimeout(() => { try { $('#in-inv').focus({ preventScroll: true }); } catch (e) {} }, 0); });
+  $('#zone-edit').onclick = () => {
+    openSheet('Changer de zone', `<div class="panel"><p class="lead">Bipez une étiquette zone (code zone) ou saisissez le nom de la zone.</p>
+      <form class="field" id="form-zone"><input class="code" id="in-zone" value="${esc(INV.zone)}" placeholder="Z-A1" aria-label="Zone"><button class="btn primary" type="submit">Valider</button></form>
+      <button class="btn" id="zone-none">Sans zone</button></div>`);
+    $('#form-zone').addEventListener('submit', ev => { ev.preventDefault(); INV.zone = $('#in-zone').value.trim().toUpperCase(); saveInv(); closeSheet(); renderInv(); });
+    $('#zone-none').onclick = () => { INV.zone = ''; saveInv(); closeSheet(); renderInv(); };
+  };
+  $('#inv-undo').onclick = () => { INV.scans.pop(); saveInv(); invLast = null; renderInv(); };
+  $('#inv-end').onclick = () => { if (!invConfirm) { invConfirm = true; renderInv(); setTimeout(() => { if (invConfirm) { invConfirm = false; renderInv(); } }, 5000); return; } invConfirm = false; INV = null; invLast = null; store.del('inv'); renderInv(); toast('Inventaire effacé'); };
+  $('#inv-export').onclick = exportInv;
+}
+function renderCamHud() {
+  const hud = $('#cam-hud');
+  if (camCtx !== 'inv' || !INV) { hud.innerHTML = '<div class="banner"><span class="k">Visez le code-barre</span><span class="d">Code-barre à l’horizontale dans le cadre, à 15–25 cm. La lecture est automatique.</span></div>'; $('#cam-count').textContent = ''; return; }
+  const st = invStats();
+  $('#cam-count').textContent = `${st.buckets.ok.length}/${st.exp.size} · zone ${INV.zone || '—'}`;
+  hud.innerHTML = invLast ? `<div class="banner ${invLast.tone}"><span class="k">${esc(invLast.k)}</span><span class="d">${esc(invLast.d)}</span></div>` : '<div class="banner"><span class="k">Prêt à biper</span><span class="d">Les articles s’enregistrent à la volée. Bipez un code zone pour changer de zone.</span></div>';
+}
+function updateBadge() { const b = $('#inv-badge'); if (INV && INV.scans.length) { b.textContent = INV.scans.length; b.hidden = false; } else b.hidden = true; }
+
+/* ---------- Export ---------- */
+let dlCap = null;
+function getDownloads() {
+  if (!dlCap) dlCap = (window.claude && typeof window.claude.use === 'function') ? Promise.resolve(window.claude.use('downloads')).catch(() => null) : Promise.resolve(null);
+  return dlCap;
+}
+async function saveFile(filename, blob) {
+  const dl = inFrame ? await getDownloads() : null;
+  if (dl) {
+    try { await dl.save({ filename, data: blob }); toast('Fichier enregistré'); }
+    catch (e) { if (e && e.code !== 'declined') toast('Export impossible : ' + (e.message || e.code)); }
+    return;
+  }
+  if (inFrame) { toast("L'export n'est pas disponible dans cette vue."); return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 3000);
+}
+function exportInv() {
+  if (!INV) return;
+  const st = invStats();
+  const cols = ['No_Stock','Enseigne','Magasin','Fournisseur','Modele','Article','Couleur','Etat_Stock','Type_Stock','Nature_stock','Prix_revient','Nom_Client','No_cde_client','Localite'].filter(c => c in D.col);
+  const rowOf = i => cols.map(c => { const v = V(i, c); return isEmpty(v) ? '' : v; });
+  const hhmm = t => new Date(t).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+  const scanned = [['Heure','Zone','Code lu','Résultat',...cols], ...INV.scans.map(s => { const c = s._c, [, k, d] = invLabel(c); return [hhmm(s.t), s.zone, s.raw, k + (c.cls === 'ok' ? '' : ' : ' + d), ...(c.i != null ? rowOf(c.i) : [s.ns])]; })];
+  const missing = [cols, ...st.missing.map(rowOf)];
+  const trop = [['Heure','Zone','Écart',...cols], ...st.buckets.trop.map(s => { const [, k, d] = invLabel(s._c); return [hhmm(s.t), s.zone, k + ' : ' + d, ...rowOf(s._c.i)]; })];
+  const inconnus = [['Heure','Zone','Code lu','N° de stock'], ...st.buckets.inconnu.map(s => [hhmm(s.t), s.zone, s.raw, s.ns])];
+  const resume = [
+    ['Inventaire', INV.sites.join(' + ')], ['Type de stock', INV.type === 'all' ? 'Tous' : INV.type], ['États attendus', INV.etats.join(', ')],
+    ['Démarré le', hhmm(INV.started)], ['Exporté le', hhmm(Date.now())], ['Fichier source', INV.source || ''], [],
+    ['Attendus', st.exp.size], ['Bipés (total)', INV.scans.length], ['Trouvés attendus', st.buckets.ok.length], ['Manquants', st.missing.length], ['En trop', st.buckets.trop.length], ['Inconnus', st.buckets.inconnu.length]
+  ];
+  if (INV.demo) resume.unshift(['DONNÉES DE DÉMONSTRATION']);
+  const wb = XLSX.utils.book_new();
+  const add = (aoa, name, widths) => { const ws = XLSX.utils.aoa_to_sheet(aoa); if (widths) ws['!cols'] = widths.map(w => ({ wch: w })); XLSX.utils.book_append_sheet(wb, ws, name); };
+  add(resume, 'Résumé', [22, 50]); add(missing, 'Manquants'); add(trop, 'En trop'); add(inconnus, 'Inconnus'); add(scanned, 'Tous les scans');
+  const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  const d = new Date(), stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const site = INV.sites.length === 1 ? INV.sites[0] : INV.sites.length + ' sites';
+  saveFile(`Inventaire ${site.replace(/[\\/:*?"<>|]/g, '')} ${stamp}.xlsx`, new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+}
+
+/* ---------- Prêts ---------- */
+function renderPret() {
+  const el = $('#v-pret'); if (!D) return;
+  const cn = D.col.Nature_stock, cl = D.col.Localite, list = [];
+  D.rows.forEach((r, i) => {
+    const n = cn != null ? String(r[cn] ?? '') : '', l = cl != null ? String(r[cl] ?? '') : '';
+    if (/^PRET$/i.test(n.trim()) || /pr[eê]t/i.test(l)) list.push(i);
+  });
+  const byMag = new Map(); list.forEach(i => { const m = show(i, 'Magasin'); if (!byMag.has(m)) byMag.set(m, []); byMag.get(m).push(i); });
+  el.innerHTML = `<div class="panel"><h2>Prêts &amp; événements</h2><p class="lead">Articles en nature « PRET » ou dont la localité commence par « Prêt » dans le fichier. ${list.length} article${list.length > 1 ? 's' : ''}.</p></div>` +
+    (list.length ? [...byMag.entries()].sort((a, b) => a[0].localeCompare(b[0], 'fr')).map(([m, is]) => `<div class="view" style="gap:8px"><h3>${esc(m)} · ${is.length}</h3><div class="list">${is.map(i => `<button class="item" data-fiche="${i}"><span class="t">${esc(show(i,'Modele') || show(i,'Article'))}</span><span class="m"><span class="mono">${esc(show(i,'No_Stock'))}</span>${show(i,'Localite') ? ' · ' + esc(show(i,'Localite')) : ''}${show(i,'Nom_Client') ? ' · ' + esc(show(i,'Nom_Client')) : ''}</span><span class="r">${etatPill(i)}</span></button>`).join('')}</div></div>`).join('') : '<div class="list"><div class="empty">Aucun article en prêt dans ce fichier.</div></div>');
+}
+
+/* ---------- OneDrive (version installée uniquement) ---------- */
+const MS = { clientId: 'bb277b0b-f13b-40b6-b63a-e5a5acfc08db', authority: 'https://login.microsoftonline.com/6167cd2c-9a99-425b-8a64-4177b6be728c', scopes: ['Files.Read', 'User.Read'] };
+MS.meta = (t => ({ authorization_endpoint: `https://login.microsoftonline.com/${t}/oauth2/v2.0/authorize`, token_endpoint: `https://login.microsoftonline.com/${t}/oauth2/v2.0/token`, end_session_endpoint: `https://login.microsoftonline.com/${t}/oauth2/v2.0/logout`, issuer: `https://login.microsoftonline.com/${t}/v2.0`, jwks_uri: `https://login.microsoftonline.com/${t}/discovery/v2.0/keys` }))('6167cd2c-9a99-425b-8a64-4177b6be728c');
+const od = { app: null, account: null, link: store.get('odlink', null), lastCheck: 0, busy: false, ready: null };
+const odAvailable = () => !inFrame && !!window.msal;
+function odInit() {
+  if (!odAvailable()) return Promise.resolve();
+  if (od.ready) return od.ready;
+  od.ready = (async () => {
+    od.app = new msal.PublicClientApplication({ auth: { clientId: MS.clientId, authority: MS.authority, knownAuthorities: ['login.microsoftonline.com'], authorityMetadata: JSON.stringify(MS.meta), redirectUri: location.origin + location.pathname, navigateToLoginRequestUrl: false }, cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: true } });
+    try { const r = await od.app.handleRedirectPromise(); if (r && r.account) { od.account = r.account; od.justLogged = true; } }
+    catch (e) { toast('Connexion Microsoft refusée : ' + (e.errorMessage || e.message || e)); }
+    if (!od.account) od.account = od.app.getAllAccounts()[0] || null;
+  })();
+  return od.ready;
+}
+async function odToken(interactive) {
+  await odInit(); if (!od.app) return null;
+  if (!od.account) { if (interactive) await od.app.loginRedirect({ scopes: MS.scopes, prompt: 'select_account' }); return null; }
+  try { return (await od.app.acquireTokenSilent({ scopes: MS.scopes, account: od.account })).accessToken; }
+  catch (e) { if (interactive) await od.app.acquireTokenRedirect({ scopes: MS.scopes, account: od.account }); return null; }
+}
+async function graph(path, token) {
+  const r = await fetch('https://graph.microsoft.com/v1.0' + path, { headers: { Authorization: 'Bearer ' + token } });
+  if (!r.ok) throw new Error(r.status === 404 ? 'fichier introuvable sur OneDrive' : 'OneDrive a répondu ' + r.status);
+  return r.json();
+}
+function setBusy(b) { $('#btn-refresh').classList.toggle('busy', b); }
+async function odRefresh({ force = false, interactive = false, quiet = false } = {}) {
+  if (!od.link || od.busy) return;
+  od.busy = true; setBusy(true);
+  try {
+    const tk = await odToken(interactive);
+    if (!tk) { if (!quiet) toast('Connexion OneDrive expirée : touchez Actualiser pour vous reconnecter.'); return; }
+    const meta = await graph(`/drives/${encodeURIComponent(od.link.driveId)}/items/${encodeURIComponent(od.link.id)}`, tk);
+    od.lastCheck = Date.now();
+    const mod = Date.parse(meta.lastModifiedDateTime);
+    if (!force && D && D.meta.source === 'onedrive' && D.meta.odModified === mod) { if (!quiet) toast('Déjà à jour (fichier du ' + fmtDT(mod) + ')'); return; }
+    const url = meta['@microsoft.graph.downloadUrl'];
+    const buf = await (url ? fetch(url) : fetch(`https://graph.microsoft.com/v1.0/drives/${encodeURIComponent(od.link.driveId)}/items/${encodeURIComponent(od.link.id)}/content`, { headers: { Authorization: 'Bearer ' + tk } })).then(r => { if (!r.ok) throw new Error('téléchargement ' + r.status); return r.arrayBuffer(); });
+    const p = parseWorkbook(new Uint8Array(buf));
+    const data = { header: p.header, rows: p.rows, meta: { fileName: meta.name, fileDate: mod, savedAt: p.savedAt, loadedAt: Date.now(), demo: false, source: 'onedrive', odModified: mod } };
+    D = buildIndex(data); await idb.set('data', { header: data.header, rows: data.rows, meta: data.meta });
+    afterData(); refreshFiche(); if (tab === 'search') runSearch();
+    if (!quiet) toast('Données actualisées : fichier du ' + fmtDT(freshness().when));
+  } catch (e) { if (!quiet) toast('Actualisation impossible : ' + (e.message || e)); }
+  finally { od.busy = false; setBusy(false); }
+}
+function autoRefresh() { if (od.link && od.account && Date.now() - od.lastCheck > 5 * 60000) odRefresh({ quiet: true }); }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && od.link && Date.now() - od.lastCheck > 2 * 60000) odRefresh({ quiet: true }); });
+$('#btn-refresh').onclick = () => { ensureAudio(); if (od.link) odRefresh({ interactive: true }); else pickFile(); };
+
+function odPanelHTML() {
+  if (!odAvailable()) return '';
+  let body;
+  if (!od.account) body = `<p class="lead">Connectez votre compte Microsoft : l'appli ira chercher elle-même la dernière version du fichier sur votre OneDrive, à l'ouverture et avant les scans.</p><button class="btn primary" id="od-login">Se connecter à OneDrive</button>`;
+  else body = `<dl><dt>Compte</dt><dd>${esc(od.account.username || od.account.name || '')}</dd>
+      <dt>Fichier suivi</dt><dd>${od.link ? esc(od.link.name) : '<span style="color:var(--warn)">aucun, choisissez-le ci-dessous</span>'}</dd>
+      ${od.lastCheck ? `<dt>Dernière vérification</dt><dd>${fmtDT(od.lastCheck)}</dd>` : ''}</dl>
+    ${od.link ? '<div class="row"><button class="btn primary" id="od-now">Actualiser maintenant</button><button class="btn" id="od-change">Changer de fichier</button></div>' : ''}
+    <div id="od-pick" ${od.link ? 'hidden' : ''}>
+      <form class="field" id="od-search"><input id="od-q" value="Scan Stock" placeholder="Nom du fichier" aria-label="Nom du fichier"><button class="btn" type="submit">Chercher</button></form>
+      <div class="list" id="od-res" style="margin-top:8px"><div class="empty">Cherchez le fichier par une partie de son nom.</div></div>
+    </div>
+    <button class="btn danger" id="od-logout" style="align-self:flex-start">Déconnecter OneDrive</button>`;
+  return `<div class="panel"><h3>OneDrive</h3>${body}<p class="hint">Lecture seule : l'appli télécharge une copie du fichier, elle ne le modifie jamais.</p></div>`;
+}
+function odBindPanel() {
+  if (!odAvailable()) return;
+  const b = id => document.getElementById(id);
+  if (b('od-login')) b('od-login').onclick = () => odToken(true);
+  if (b('od-now')) b('od-now').onclick = () => { closeSheet(); odRefresh({ interactive: true, force: true }); };
+  if (b('od-change')) b('od-change').onclick = () => { b('od-pick').hidden = false; };
+  if (b('od-logout')) b('od-logout').onclick = async () => { od.link = null; store.del('odlink'); try { await od.app.logoutRedirect({ account: od.account, onRedirectNavigate: () => false }); } catch (e) {} od.account = null; closeSheet(); afterData(); toast('OneDrive déconnecté'); };
+  if (b('od-search')) b('od-search').addEventListener('submit', async ev => {
+    ev.preventDefault(); const q = b('od-q').value.trim() || 'xlsx'; const res = b('od-res');
+    res.innerHTML = '<div class="empty">Recherche…</div>';
+    try {
+      const tk = await odToken(true); if (!tk) return;
+      const j = await graph(`/me/drive/root/search(q='${encodeURIComponent(q.replace(/'/g, "''"))}')?$top=40`, tk);
+      const files = (j.value || []).filter(f => f.file && /\.xls[xm]?$/i.test(f.name));
+      res.innerHTML = files.length ? files.map((f, n) => `<button class="item" data-odf="${n}"><span class="t">${esc(f.name)}</span><span class="m">${esc((f.parentReference && f.parentReference.path || '').replace(/^\/drive\/root:?/, '') || 'OneDrive')} · modifié le ${fmtDT(Date.parse(f.lastModifiedDateTime))}</span><span class="r"></span></button>`).join('') : '<div class="empty">Aucun fichier Excel trouvé avec ce nom.</div>';
+      res.querySelectorAll('[data-odf]').forEach(el => el.onclick = () => {
+        const f = files[+el.dataset.odf];
+        od.link = { id: f.id, driveId: f.parentReference.driveId, name: f.name }; store.set('odlink', od.link);
+        closeSheet(); afterData(); odRefresh({ interactive: true, force: true });
+      });
+    } catch (e) { res.innerHTML = `<div class="empty" style="color:var(--bad)">${esc(e.message || e)}</div>`; }
+  });
+}
+
+/* ---------- Réglages ---------- */
+function openSettings() {
+  const m = D && D.meta;
+  openSheet('Réglages', odPanelHTML() + `
+    <div class="panel">
+      <h3>Données</h3>
+      ${m ? `<dl><dt>Fichier</dt><dd>${esc(m.fileName)}${m.demo ? ' <span class="demo-tag">DÉMO</span>' : ''}</dd>
+        ${m.savedAt || m.fileDate ? `<dt>Fichier enregistré le</dt><dd>${new Date(m.savedAt || m.fileDate).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</dd>` : ''}
+        ${D.lastMove ? `<dt>Mouvement le plus récent</dt><dd>${fmtDate(D.lastMove)}</dd>` : ''}
+        <dt>Chargé le</dt><dd>${new Date(m.loadedAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</dd>
+        <dt>Articles</dt><dd class="mono">${D.rows.length.toLocaleString('fr-FR')}</dd></dl>
+        ${freshness().cls === 'warn' || freshness().cls === 'bad' ? `<div class="banner ${freshness().cls === 'bad' ? 'bad' : 'warn'}"><span class="k">Données anciennes</span><span class="d">Le fichier a été enregistré il y a ${Math.floor(freshness().h / 24)} jour(s). Ouvrez-le sur un PC du réseau pour qu\u2019il se mette à jour, enregistrez-le, puis rechargez-le ici.</span></div>` : ''}` : '<p class="lead">Aucun fichier chargé.</p>'}
+      <div class="row"><button class="btn primary" id="set-reload">Charger un fichier à jour</button><button class="btn danger" id="set-clear" ${m ? '' : 'disabled'}>Retirer les données du téléphone</button></div>
+      <p class="hint">Lecture seule : l'appli travaille sur une copie en mémoire. Elle ne modifie jamais votre fichier Excel ni sa connexion au logiciel de stock. Les données restent sur ce téléphone.</p>
+    </div>
+    <div class="panel">
+      <h3>Infos affichées après un scan</h3>
+      <p class="hint">Le N° de stock, l'état et le modèle sont toujours en tête. Choisissez en dessous les infos qui suivent, dans l'ordre voulu.</p>
+      <div id="fld-editor"></div>
+      <label class="toggle"><span>Proposer « Tous les détails » sous la fiche</span><input type="checkbox" id="set-details" ${settings.details ? 'checked' : ''}></label>
+    </div>
+    <div class="panel">
+      <h3>Retours au scan</h3>
+      <label class="toggle"><span>Bip sonore au scan</span><input type="checkbox" id="set-son" ${settings.son ? 'checked' : ''}></label>
+      <label class="toggle"><span>Vibration (Android)</span><input type="checkbox" id="set-vib" ${settings.vib ? 'checked' : ''}></label>
+    </div>
+    <div class="panel"><h3>Mode de scan</h3><p class="lead">${liveOK ? 'Caméra en direct disponible.' : "Dans cette vue, la caméra en direct n'est pas autorisée : le scan passe par une photo. Une douchette Bluetooth fonctionne aussi dans le champ de saisie."}</p></div>`);
+  $('#set-reload').onclick = () => { closeSheet(); pickFile(); };
+  $('#set-clear').onclick = async () => { await idb.del('data'); D = null; closeSheet(); afterData(); toast('Données retirées'); };
+  $('#set-details').onchange = e => { settings.details = e.target.checked; saveSettings(); refreshFiche(); };
+  renderFieldEditor();
+  odBindPanel();
+  $('#set-son').onchange = e => { settings.son = e.target.checked; saveSettings(); };
+  $('#set-vib').onchange = e => { settings.vib = e.target.checked; saveSettings(); };
+}
+function renderFieldEditor() {
+  const el = $('#fld-editor'); if (!el) return;
+  const sel = settings.fields, rest = Object.keys(FIELD_LABELS).filter(k => !sel.includes(k));
+  el.innerHTML = `
+    <div class="list">${sel.length ? sel.map((k, n) => `<div class="item fld"><span class="t">${esc(FIELD_LABELS[k] || k)}</span><span class="r">
+      <button class="x" data-fup="${n}" aria-label="Monter" ${n === 0 ? 'disabled' : ''}>↑</button>
+      <button class="x" data-fdown="${n}" aria-label="Descendre" ${n === sel.length - 1 ? 'disabled' : ''}>↓</button>
+      <button class="x" data-fdel="${n}" aria-label="Retirer">✕</button></span></div>`).join('') : '<div class="empty">Aucune info : la fiche n’affichera que le N° de stock, l’état et le modèle.</div>'}</div>
+    <h3 style="margin-top:6px">Ajouter</h3>
+    <div class="chips">${rest.map(k => `<button class="chip" data-fadd="${esc(k)}">+ ${esc(FIELD_LABELS[k])}</button>`).join('')}</div>
+    <button class="btn" id="fld-reset" style="align-self:flex-start;min-height:38px">Rétablir le choix par défaut</button>`;
+  const upd = () => { saveSettings(); renderFieldEditor(); refreshFiche(); };
+  el.querySelectorAll('[data-fup]').forEach(b => b.onclick = () => { const n = +b.dataset.fup; [sel[n - 1], sel[n]] = [sel[n], sel[n - 1]]; upd(); });
+  el.querySelectorAll('[data-fdown]').forEach(b => b.onclick = () => { const n = +b.dataset.fdown; [sel[n + 1], sel[n]] = [sel[n], sel[n + 1]]; upd(); });
+  el.querySelectorAll('[data-fdel]').forEach(b => b.onclick = () => { sel.splice(+b.dataset.fdel, 1); upd(); });
+  el.querySelectorAll('[data-fadd]').forEach(b => b.onclick = () => { sel.push(b.dataset.fadd); upd(); });
+  $('#fld-reset').onclick = () => { settings.fields = DEFAULT_FIELDS.slice(); upd(); };
+}
+let lastFicheNs = null;
+function refreshFiche() { if (lastFicheNs == null || !D) return; const i = D.idx.get(lastFicheNs); const out = $('#scan-result'); if (i != null && out.querySelector('.fiche')) out.innerHTML = ficheHTML(i); }
+$('#btn-settings').onclick = openSettings;
+$('#datastat').onclick = openSettings;
+function pickFile() { const f = $('#file-xlsx'); f.value = ''; f.click(); }
+$('#btn-load').onclick = pickFile;
+$('#btn-demo').onclick = demoData;
+$('#file-xlsx').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; if (f) { setTab('scan'); render(); loadFile(f); } });
+
+/* ---------- Navigation ---------- */
+let tab = 'scan';
+function setTab(t) { tab = t; document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.tab === t ? 'page' : 'false')); render(); window.scrollTo(0, 0); }
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+function render() {
+  const has = !!D;
+  $('#v-load').hidden = has;
+  $('#v-scan').hidden = !has || tab !== 'scan';
+  $('#v-search').hidden = !has || tab !== 'search';
+  $('#v-inv').hidden = !has || tab !== 'inv';
+  $('#v-pret').hidden = !has || tab !== 'pret';
+  if (!has) return;
+  if (tab === 'inv') renderInv();
+  if (tab === 'pret') renderPret();
+  if (tab === 'search') runSearch();
+}
+function afterData() {
+  const t = $('#datatxt'), d = $('#datadot');
+  if (D) {
+    const m = D.meta, fr = freshness();
+    t.innerHTML = m.demo ? '<span class="demo-tag">DÉMO</span> données d\u2019exemple' : `Données ${fmtDT(fr.when)}`;
+    d.className = 'dot ' + fr.cls;
+    $('#scanpad').innerHTML = scanButtons('scan');
+    $('#scanhint').innerHTML = liveOK ? 'Douchette Bluetooth : bipez directement dans le champ.' : 'Touchez <b>Scanner</b> pour prendre l’étiquette en photo, bien à plat et nette. Une douchette Bluetooth fonctionne aussi dans le champ.';
+    fillFilters(); invExpCache = null; renderHist();
+    $('#btn-refresh').hidden = false;
+  } else { t.textContent = od.link ? 'Chargement OneDrive…' : 'Aucun fichier'; d.className = 'dot'; $('#btn-refresh').hidden = !od.link; }
+  updateBadge(); render();
+  if (D && pendingHash) { const c = pendingHash; pendingHash = null; handleScan(c); }
+}
+
+/* ---------- Code reçu par le lien (Raccourci iPhone : …#c1102600114647) ---------- */
+let pendingHash = null;
+function readHash() {
+  const m = /^#c(\d{11,13})$/.exec(location.hash || '');
+  if (!m) return;
+  if (!D) { pendingHash = m[1]; return; }
+  pendingHash = null; handleScan(m[1]);
+}
+window.addEventListener('hashchange', readHash);
+
+/* ---------- Démarrage ---------- */
+(async () => {
+  render();
+  const saved = await idb.get('data');
+  if (saved && saved.rows && saved.header) { D = buildIndex(saved); afterData(); }
+  else afterData();
+  readHash();
+  if (odAvailable()) {
+    await odInit();
+    if (od.account && od.link) odRefresh({ quiet: !!D });
+    else if (od.account && od.justLogged) { openSettings(); toast('Connecté. Cherchez maintenant votre fichier.'); }
+    afterData();
+  }
+  if (pendingHash && !D) toast('Code reçu : chargez d’abord le fichier stock.');
+})();
+})();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+</script>
+</body>
+</html>
