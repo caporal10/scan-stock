@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '30/10 14:25';</script>
+<script>window.APP_VERSION = '30/10 14:29';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -1066,11 +1066,14 @@ function renderPret() {
   const el = $('#v-pret'); if (!D) return;
   const out = [], dispo = [];
   for (let i = 0; i < D.rows.length; i++) { if (pretInfo(i)) out.push(i); else if (isPretable(i)) dispo.push(i); }
-  const seg = `<div class="seg" role="tablist"><button data-pv="out" aria-pressed="${pretView === 'out'}">En prêt · ${out.length}</button><button data-pv="dispo" aria-pressed="${pretView === 'dispo'}">À prêter · ${dispo.length}</button></div>`;
+  // Comptage par prêt (client / événement), pas par article
+  const pretKey = i => { const p = pretInfo(i); return norm(p.qui) + '|' + p.motif.k; };
+  const nbPrets = l => new Set(l.map(pretKey)).size;
+  const seg = `<div class="seg" role="tablist"><button data-pv="out" aria-pressed="${pretView === 'out'}">En prêt · ${nbPrets(out)}</button><button data-pv="dispo" aria-pressed="${pretView === 'dispo'}">À prêter · ${dispo.length}</button></div>`;
   let body = '';
   if (pretView === 'out') {
-    const cnt = k => out.filter(i => pretInfo(i).motif.k === k).length;
-    const chips = [['', 'Tous', out.length], ...MOTIFS.map(m => [m.k, m.label, cnt(m.k)]), ['autre', 'Autre', cnt('autre')]].filter(c => c[0] === '' || c[2]);
+    const cnt = k => nbPrets(out.filter(i => pretInfo(i).motif.k === k));
+    const chips = [['', 'Tous', nbPrets(out)], ...MOTIFS.map(m => [m.k, m.label, cnt(m.k)]), ['autre', 'Autre', cnt('autre')]].filter(c => c[0] === '' || c[2]);
     const list = out.filter(i => !pretMotif || pretInfo(i).motif.k === pretMotif);
     body = `<div class="chips">${chips.map(([k, l, n]) => `<button class="chip" data-pm="${k}" aria-pressed="${pretMotif === k}">${l} · <b>${n}</b></button>`).join('')}</div>
       ${list.length ? (() => {
