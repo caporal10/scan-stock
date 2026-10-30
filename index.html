@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '30/10 14:45';</script>
+<script>window.APP_VERSION = '30/10 16:03';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -172,6 +172,7 @@ dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
 .scope b{font-weight:700}
 .scope.off{background:var(--warn-bg);color:var(--warn)}
 .scope .chip{background:var(--surface);color:var(--ink)}
+.linkbox{font-size:12px;word-break:break-all;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px;user-select:all;-webkit-user-select:all}
 .livinfo{display:flex;flex-wrap:wrap;gap:6px}
 .notfound{background:var(--bad-bg);color:var(--bad);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:4px}
 .notfound b{font-family:var(--f-display);font-size:22px;text-transform:uppercase}
@@ -336,6 +337,11 @@ dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
         <div class="row">
           <select id="f-mag" aria-label="Magasin" style="flex:1 1 160px"></select>
           <select id="f-etat" aria-label="État du stock" style="flex:1 1 160px"></select>
+        </div>
+        <div class="seg" id="f-lieu" role="group" aria-label="Magasin ou dépôt">
+          <button type="button" data-lieu="" aria-pressed="true">Tout</button>
+          <button type="button" data-lieu="D" aria-pressed="false">Magasin (démo)</button>
+          <button type="button" data-lieu="P" aria-pressed="false">Dépôt (physique)</button>
         </div>
       </div>
       <p class="count" id="q-count"></p>
@@ -804,6 +810,7 @@ function handleScan(raw) {
     const i = D ? D.idx.get(c.value) : undefined;
     hist = [{ ns: c.value, t: Date.now() }, ...hist.filter(h => h.ns !== c.value)].slice(0, 25); store.set('hist', hist);
     if (i == null) { feedback('bad'); out.innerHTML = `<div class="notfound"><b>Introuvable</b><span>N° de stock <span class="mono">${esc(c.value)}</span> absent du fichier chargé.${c.raw && c.raw !== c.value ? ` Code lu : <span class="mono">${esc(c.raw)}</span>.` : ''}</span></div>`; }
+    else if (!ensOK(i)) { feedback('bad'); out.innerHTML = `<div class="notfound"><b>Autre enseigne</b><span>N° <span class="mono">${esc(c.value)}</span> : cet article n\u2019appartient pas au stock ${esc(ensLabel())}.</span></div>`; }
     else { feedback('ok'); lastFicheNs = c.value; out.innerHTML = ficheHTML(i); }
     renderHist();
   } else if (c.kind === 'zone') { feedback('zone'); out.innerHTML = `<div class="banner info"><span class="k">Code zone</span><span class="d">${esc(c.value)}. Les zones servent dans l'onglet Inventaire.</span></div>`; }
@@ -815,7 +822,7 @@ function renderHist() {
   const el = $('#hist');
   if (!hist.length) { el.innerHTML = '<div class="empty">Les articles scannés apparaîtront ici.</div>'; return; }
   el.innerHTML = hist.map(h => {
-    const i = D && D.idx.get(h.ns);
+    const i0 = D && D.idx.get(h.ns), i = i0 != null && ensOK(i0) ? i0 : null;
     const t = new Date(h.t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     if (i == null) return `<div class="item"><span class="t mono">${esc(h.ns)}</span><span class="m">Introuvable · ${t}</span><span class="r"><span class="pill bad">?</span></span></div>`;
     return `<button class="item" data-fiche="${i}"><span class="t">${esc(show(i,'Modele') || show(i,'Article'))}</span><span class="m"><span class="mono">${esc(h.ns)}</span> · ${esc(show(i,'Magasin'))} · ${t}</span><span class="r">${etatPill(i)}</span></button>`;
@@ -828,31 +835,37 @@ $('#form-scan').addEventListener('submit', e => { e.preventDefault(); ensureAudi
 function fillFilters() {
   const mags = new Map(), etats = new Map();
   const cm = D.col.Magasin, ce = D.col.Etat_Stock;
-  for (const r of D.rows) { mags.set(r[cm], (mags.get(r[cm]) || 0) + 1); etats.set(r[ce], (etats.get(r[ce]) || 0) + 1); }
+  D.rows.forEach((r, i) => { if (!ensOK(i)) return; mags.set(r[cm], (mags.get(r[cm]) || 0) + 1); etats.set(r[ce], (etats.get(r[ce]) || 0) + 1); });
   const opt = (m, all) => `<option value="">${all}</option>` + [...m.entries()].filter(([k]) => !isEmpty(k)).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<option value="${esc(k)}">${esc(k)} (${n.toLocaleString('fr-FR')})</option>`).join('');
-  $('#f-mag').innerHTML = opt(mags, 'Tous les magasins'); $('#f-etat').innerHTML = opt(etats, 'Tous les états');
-  if (settings.searchMag && mags.has(settings.searchMag)) $('#f-mag').value = settings.searchMag;
+  $('#f-mag').innerHTML = opt(mags, profil().ens ? 'Tous les magasins ' + ensLabel() : 'Tous les magasins'); $('#f-etat').innerHTML = opt(etats, 'Tous les états');
+  const p = profil(), own = p.ens ? MAGS[p.mags[0]] : '';
+  const def = settings.searchMag && mags.has(settings.searchMag) ? settings.searchMag : (own && mags.has(own) ? own : '');
+  if (def) $('#f-mag').value = def;
 }
 let qT = 0;
 function runSearch() {
   if (!D) return;
   if (document.activeElement && document.activeElement.id === 'in-q') autoRefresh();
-  const q = norm($('#in-q').value).split(/\s+/).filter(Boolean), m = $('#f-mag').value, et = $('#f-etat').value;
+  const q = norm($('#in-q').value).split(/\s+/).filter(Boolean), m = $('#f-mag').value, et = $('#f-etat').value, li = searchLieu;
   const res = $('#q-res'), cnt = $('#q-count');
-  if (!q.length && !m && !et) { cnt.textContent = ''; res.innerHTML = '<div class="empty">Tapez un nom de client, un modèle, un fournisseur, un n° de commande ou de BL. Plusieurs mots se combinent, par exemple « canape cuir ». Utilisez les filtres pour le magasin et l’état.</div>'; return; }
-  const cm = D.col.Magasin, ce = D.col.Etat_Stock, out = [];
+  if (!q.length && !m && !et && !li) { cnt.textContent = ''; res.innerHTML = '<div class="empty">Tapez un nom de client, un modèle, un fournisseur, un n° de commande ou de BL. Plusieurs mots se combinent, par exemple « canape cuir ». Utilisez les filtres pour le magasin et l’état.</div>'; return; }
+  const cm = D.col.Magasin, ce = D.col.Etat_Stock, ct = D.col.Type_Stock, out = [];
   let n = 0;
   for (let i = 0; i < D.rows.length; i++) {
     const r = D.rows[i];
+    if (!ensOK(i)) continue;
     if (m && r[cm] !== m) continue; if (et && r[ce] !== et) continue;
+    if (li && String(r[ct] ?? '').trim().toUpperCase() !== li) continue;
     const t = D.txt[i]; if (!q.every(w => t.includes(w))) continue;
     n++; if (out.length < 80) out.push(i);
   }
   cnt.textContent = n ? `${n.toLocaleString('fr-FR')} résultat${n > 1 ? 's' : ''}${n > 80 ? ' · 80 premiers affichés, affinez la recherche' : ''}` : '';
-  res.innerHTML = out.length ? out.map(i => `<button class="item" data-fiche="${i}"><span class="t">${esc(show(i,'Modele') || show(i,'Article'))}</span><span class="m"><span class="mono">${esc(show(i,'No_Stock'))}</span> · ${esc(show(i,'Magasin'))}${show(i,'Nom_Client') ? ' · ' + esc(show(i,'Nom_Client')) : ''}</span><span class="r">${etatPill(i)}</span></button>`).join('') : '<div class="empty">Aucun article ne correspond.</div>';
+  res.innerHTML = out.length ? out.map(i => `<button class="item" data-fiche="${i}"><span class="t">${esc(show(i,'Modele') || show(i,'Article'))}</span><span class="m"><span class="mono">${esc(show(i,'No_Stock'))}</span> · ${esc(show(i,'Magasin'))}${LIEU[show(i,'Type_Stock').toUpperCase()] ? ' · ' + LIEU[show(i,'Type_Stock').toUpperCase()] : ''}${show(i,'Nom_Client') ? ' · ' + esc(show(i,'Nom_Client')) : ''}</span><span class="r">${etatPill(i)}</span></button>`).join('') : '<div class="empty">Aucun article ne correspond.</div>';
 }
 $('#in-q').addEventListener('input', () => { clearTimeout(qT); qT = setTimeout(runSearch, 150); });
 $('#f-mag').addEventListener('change', runSearch); $('#f-etat').addEventListener('change', runSearch);
+let searchLieu = '';
+$('#f-lieu').addEventListener('click', e => { const b = e.target.closest('[data-lieu]'); if (!b) return; searchLieu = b.dataset.lieu; $('#f-lieu').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); runSearch(); });
 
 /* ---------- Inventaire ---------- */
 const PHYS_DEFAULT = ['Disponible', 'Réservé', 'Livraison en cours', 'Bon inter magasins en cours'];
@@ -1071,7 +1084,7 @@ function renderPret() {
   const el = $('#v-pret'); if (!D) return;
   const out = [], dispo = [];
   const sc = scopeMags();
-  for (let i = 0; i < D.rows.length; i++) { if (!inPretScope(i, sc)) continue; if (pretInfo(i)) out.push(i); else if (isPretable(i)) dispo.push(i); }
+  for (let i = 0; i < D.rows.length; i++) { if (!ensOK(i) || !inPretScope(i, sc)) continue; if (pretInfo(i)) out.push(i); else if (isPretable(i)) dispo.push(i); }
   // Comptage par prêt (client / événement), pas par article
   const pretKey = i => { const p = pretInfo(i); return norm(p.qui) + '|' + p.motif.k; };
   const nbPrets = l => new Set(l.map(pretKey)).size;
@@ -1203,12 +1216,24 @@ const PROFILS = {
   'dep-maromme': { label: 'Dépôt Maromme', mags: ['CCRouen', 'CCLeHavre', 'RBRouen'], tours: [1, 2, 3] },
   'dep-rennes': { label: 'Dépôt Rennes', mags: ['RBRennes', 'RBNantes', 'CCNantes'], tours: [4, 5, 6] },
   'dep-tours': { label: 'Dépôt Tours', mags: ['RBTours'], tours: [7] },
-  ...Object.fromEntries(Object.entries(MAGS).map(([k, v]) => ['mag-' + k, { label: v, mags: [k] }]))
+  ...Object.fromEntries(Object.entries(MAGS).map(([k, v]) => ['mag-' + k, { label: v, mags: [k], ens: k.slice(0, 2) }]))
 };
 let scopeOn = true; // « Tout voir » le désactive pour la session
 const profil = () => PROFILS[settings.profil] || PROFILS.admin;
-function scopeMags() {
-  const p = profil(); if (!p.mags || !scopeOn) return null;
+// Un magasin ne voit que le stock de son enseigne (toujours, filtre non levable)
+const ensOK = i => { const e = profil().ens; return !e || show(i, 'Enseigne').toUpperCase() === e; };
+const ensLabel = () => ({ CC: 'Cuir Center', RB: 'Roche Bobois' })[profil().ens] || '';
+
+/* ---------- Verrouillage administrateur ---------- */
+let LOCK = store.get('lock', null); // { h: empreinte du code }
+const isLocked = () => !!(LOCK && LOCK.h);
+async function hashPin(pin) {
+  const txt = 'scanstock|' + pin;
+  try { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(txt)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
+  catch (e) { let h = 5381; for (const ch of txt) h = ((h << 5) + h + ch.charCodeAt(0)) | 0; return 'x' + (h >>> 0).toString(16); }
+}
+function scopeMags(force) {
+  const p = profil(); if (!p.mags || (!scopeOn && !force)) return null;
   return { names: new Set(p.mags.map(k => norm(MAGS[k]))), codes: new Set(p.mags.map(k => k.toLowerCase())) };
 }
 // Prêts : l'article appartient à un magasin du périmètre (ou porte son code magasin)
@@ -1228,9 +1253,10 @@ function scopeTours(sc) {
 }
 function scopeBar(where) {
   const p = profil(); if (!p.mags) return '';
+  if (isLocked() && where === 'liv' && p.ens) return `<div class="scope"><span>🔒 <b>${esc(p.label)}</b> · vos clients</span></div>`;
   return scopeOn
-    ? `<div class="scope"><span>Filtré : <b>${esc(p.label)}</b>${where === 'liv' ? (p.tours ? ' · tournées ' + p.tours.join(', ') : ' · vos clients') : ''}</span><button class="chip" data-scope="off">Tout voir</button></div>`
-    : `<div class="scope off"><span>Tout est affiché</span><button class="chip" data-scope="on">Revenir à ${esc(p.label)}</button></div>`;
+    ? `<div class="scope"><span>Filtré : <b>${esc(p.label)}</b>${where === 'liv' ? (p.tours ? ' · tournées ' + p.tours.join(', ') : ' · vos clients') : ''}</span><button class="chip" data-scope="off">${p.ens ? 'Tous les magasins' : 'Tout voir'}</button></div>`
+    : `<div class="scope off"><span>${p.ens ? 'Tous les magasins ' + esc(ensLabel()) : 'Tout est affiché'}</span><button class="chip" data-scope="on">Revenir à ${esc(p.label)}</button></div>`;
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-scope]'); if (!b) return; scopeOn = b.dataset.scope === 'on'; if (tab === 'liv') { livTour = livDefaultTour(); renderLiv(); } else if (tab === 'pret') renderPret(); });
 
@@ -1243,15 +1269,29 @@ function prefsHTML() {
   return `<div class="panel">
     <h3>Mes préférences</h3>
     <p class="hint">Enregistrées sur ce téléphone : chaque utilisateur règle les siennes.</p>
-    <label class="pref"><span>Je suis</span><select id="set-profil">
+    <label class="pref"><span>Je suis${isLocked() ? ' <span class="pill">🔒 verrouillé</span>' : ''}</span><select id="set-profil" ${isLocked() ? 'disabled' : ''}>
       <option value="admin" ${settings.profil === 'admin' ? 'selected' : ''}>Administrateur (voit tout)</option>
       <optgroup label="Dépôts">${['dep-maromme', 'dep-rennes', 'dep-tours'].map(k => `<option value="${k}" ${settings.profil === k ? 'selected' : ''}>${PROFILS[k].label} (${PROFILS[k].mags.join(', ')})</option>`).join('')}</optgroup>
       <optgroup label="Magasins">${Object.keys(MAGS).map(k => `<option value="mag-${k}" ${settings.profil === 'mag-' + k ? 'selected' : ''}>${MAGS[k]}</option>`).join('')}</optgroup>
     </select></label>
-    <p class="hint">Prêts et Livraisons s’affichent filtrés sur votre périmètre : un dépôt voit ses tournées complètes, un magasin ses propres clients. Le bouton « Tout voir » lève le filtre.</p>
+    <p class="hint">Prêts et Livraisons s’affichent filtrés sur votre périmètre : un dépôt voit ses tournées complètes, un magasin ses propres clients. Un magasin ne voit que le stock de son enseigne (Cuir Center ou Roche Bobois).</p>
     <label class="pref"><span>Livraison : tournée par défaut</span><select id="set-livtour">${o(tours, settings.livTour, 'Toutes les tournées')}</select></label>
     <label class="pref"><span>Livraison : jour à l\u2019ouverture</span><select id="set-livjour"><option value="demain" ${settings.livJour !== 'auj' ? 'selected' : ''}>Demain</option><option value="auj" ${settings.livJour === 'auj' ? 'selected' : ''}>Aujourd\u2019hui</option></select></label>
     <label class="pref"><span>Recherche : magasin par défaut</span><select id="set-mag">${o(mags, settings.searchMag, 'Tous les magasins')}</select></label>
+  </div>
+  <div class="panel" id="lock-panel">
+    <h3>Verrouillage administrateur</h3>
+    ${isLocked()
+      ? `<p class="lead">Ce téléphone est verrouillé sur <b>${esc(profil().label)}</b>. Le profil ne peut pas être changé${profil().ens ? ' et les livraisons restent limitées aux clients du magasin' : ''}.</p>
+         <form class="field" id="unlock-form"><input id="unlock-pin" type="password" inputmode="numeric" autocomplete="off" placeholder="Code administrateur" aria-label="Code administrateur"><button class="btn" type="submit">Déverrouiller</button></form>`
+      : `<p class="hint">Choisissez d\u2019abord le profil (par exemple Cuir Center Le Havre), puis verrouillez avec un code à 4 chiffres ou plus. L\u2019utilisateur ne pourra plus changer de profil.</p>
+         <form class="field" id="lock-form"><input id="lock-pin" type="password" inputmode="numeric" autocomplete="off" placeholder="Nouveau code" aria-label="Nouveau code administrateur"><button class="btn primary" type="submit">Verrouiller</button></form>`}
+    <p class="hint" id="lock-msg"></p>
+    ${isLocked() || inFrame ? '' : `<h3 style="margin-top:8px">Lien d\u2019installation</h3>
+      <p class="hint">Créez un lien à envoyer à un magasin ou un dépôt : en l\u2019ouvrant, son téléphone est directement réglé sur le bon profil${od.link ? ', relié au fichier OneDrive' : ''} et verrouillé avec votre code.</p>
+      <label class="pref"><span>Profil</span><select id="link-profil">${Object.entries(PROFILS).map(([k, v]) => `<option value="${k}" ${k === settings.profil ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select></label>
+      <form class="field" id="link-form"><input id="link-pin" type="password" inputmode="numeric" autocomplete="off" placeholder="Code de verrouillage" aria-label="Code de verrouillage"><button class="btn primary" type="submit">Créer le lien</button></form>
+      <div id="link-out"></div>`}
   </div>`;
 }
 
@@ -1287,7 +1327,20 @@ function openSettings() {
   $('#set-reload').onclick = () => { closeSheet(); pickFile(); };
   $('#set-clear').onclick = async () => { await idb.del('data'); D = null; closeSheet(); afterData(); toast('Données retirées'); };
   if (D) {
-    $('#set-profil').onchange = e => { settings.profil = e.target.value; saveSettings(); scopeOn = true; livTour = livDefaultTour(); render(); };
+    const lf = $('#lock-form'), uf = $('#unlock-form'), msg = $('#lock-msg');
+    const lk = $('#link-form');
+    if (lk) lk.addEventListener('submit', async ev => {
+      ev.preventDefault(); const v = $('#link-pin').value.trim(), out = $('#link-out');
+      if (!/^\d{4,}$/.test(v)) { out.innerHTML = '<p class="hint" style="color:var(--bad)">Le code doit faire au moins 4 chiffres.</p>'; return; }
+      const cfg = { p: $('#link-profil').value, h: await hashPin(v) };
+      if (od.link) cfg.f = { id: od.link.id, driveId: od.link.driveId, name: od.link.name };
+      const url = location.origin + location.pathname + '?cfg=' + b64e(cfg);
+      out.innerHTML = `<p class="hint">Lien pour <b>${esc(PROFILS[cfg.p].label)}</b> : à envoyer par mail ou SMS, à ouvrir dans <b>Safari</b>.</p><div class="linkbox mono" id="link-txt">${esc(url)}</div><button class="btn" id="link-copy" type="button">Copier le lien</button>`;
+      $('#link-copy').onclick = async () => { try { await navigator.clipboard.writeText(url); toast('Lien copié'); } catch (e) { const r = document.createRange(); r.selectNodeContents($('#link-txt')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); toast('Lien sélectionné : copiez-le'); } };
+    });
+    if (lf) lf.addEventListener('submit', async ev => { ev.preventDefault(); const v = $('#lock-pin').value.trim(); if (!/^\d{4,}$/.test(v)) { msg.textContent = 'Le code doit faire au moins 4 chiffres.'; return; } LOCK = { h: await hashPin(v) }; store.set('lock', LOCK); scopeOn = true; closeSheet(); openSettings(); render(); toast('Téléphone verrouillé sur ' + profil().label); });
+    if (uf) uf.addEventListener('submit', async ev => { ev.preventDefault(); const v = $('#unlock-pin').value.trim(); if ((await hashPin(v)) !== LOCK.h) { msg.textContent = 'Code incorrect.'; return; } LOCK = null; store.del('lock'); closeSheet(); openSettings(); render(); toast('Téléphone déverrouillé'); });
+    $('#set-profil').onchange = e => { settings.profil = e.target.value; saveSettings(); scopeOn = true; livTour = livDefaultTour(); if (D) fillFilters(); render(); };
     $('#set-livtour').onchange = e => { settings.livTour = e.target.value; saveSettings(); livTour = livDefaultTour(); };
     $('#set-livjour').onchange = e => { settings.livJour = e.target.value; saveSettings(); livDay = null; };
     $('#set-mag').onchange = e => { settings.searchMag = e.target.value; saveSettings(); $('#f-mag').value = settings.searchMag; };
@@ -1345,11 +1398,12 @@ function renderLiv() {
   const sd = serialDate(livDay);
   $('#liv-input').value = `${sd.getFullYear()}-${String(sd.getMonth() + 1).padStart(2, '0')}-${String(sd.getDate()).padStart(2, '0')}`;
   // prochains jours avec livraisons
-  const sc = scopeMags(), prof = profil();
+  const prof = profil(), sc = scopeMags(isLocked() && !!prof.ens);
   const tourNum = t => { const m = /^\s*(\d+)/.exec(t || ''); return m ? +m[1] : null; };
-  const inLiv = !sc ? (() => true)
+  const inLiv0 = !sc ? (() => true)
     : prof.tours ? (i => prof.tours.includes(tourNum(show(i, 'Tournee'))))
     : (i => sc.names.has(norm(show(i, 'Magasin'))));
+  const inLiv = i => ensOK(i) && inLiv0(i);
   $('#liv-scope').innerHTML = scopeBar('liv');
   const up = [...byDay.keys()].filter(n => n >= today && byDay.get(n).some(inLiv)).sort((a, b) => a - b).slice(0, 8);
   $('#liv-upcoming').innerHTML = up.length ? up.map(n => `<button class="chip" data-day="${n}" aria-pressed="${n === livDay}">${esc(n === today ? 'Auj.' : n === today + 1 ? 'Demain' : fmtSerial(n, { weekday: 'short', day: '2-digit', month: '2-digit' }))} · <b>${new Set(byDay.get(n).filter(inLiv).map(i => show(i, 'No_BL') || 'i' + i)).size}</b></button>`).join('') : '<span class="hint">Aucune livraison à venir dans le fichier.</span>';
@@ -1428,9 +1482,29 @@ function readHash() {
 }
 window.addEventListener('hashchange', readHash);
 
+/* ---------- Lien d'installation (?cfg=…) : profil + verrou + fichier OneDrive ---------- */
+const b64e = o => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const b64d = t => JSON.parse(decodeURIComponent(escape(atob(t.replace(/-/g, '+').replace(/_/g, '/')))));
+let setupApplied = null;
+(function applySetup() {
+  let cfg = null;
+  try { const t = new URLSearchParams(location.search).get('cfg'); if (t) cfg = b64d(t); } catch (e) { cfg = null; }
+  if (!cfg || !PROFILS[cfg.p]) return;
+  settings.profil = cfg.p; saveSettings();
+  if (cfg.h) { LOCK = { h: cfg.h }; store.set('lock', LOCK); }
+  if (cfg.f && cfg.f.id && cfg.f.driveId && !od.link) { od.link = cfg.f; store.set('odlink', od.link); }
+  scopeOn = true; setupApplied = cfg;
+})();
+const isStandalone = () => window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+
 /* ---------- Démarrage ---------- */
 (async () => {
   render();
+  if (setupApplied && !isStandalone() && !inFrame) {
+    openSheet('Installation', `<div class="panel"><h2>Scan Stock est prêt</h2>
+      <p class="lead">Ce téléphone est configuré pour <b>${esc(profil().label)}</b>${isLocked() ? ' (verrouillé)' : ''}.</p>
+      <ol class="steps"><li>Touchez <b>Partager</b> (le carré avec une flèche, en bas de Safari).</li><li>Choisissez <b>Sur l\u2019écran d\u2019accueil</b>, puis <b>Ajouter</b>.</li><li>Ouvrez Scan Stock depuis la nouvelle icône${od.link ? ' et connectez-vous avec votre compte Microsoft (Réglages > OneDrive)' : ''}.</li></ol></div>`);
+  }
   const saved = await idb.get('data');
   if (saved && saved.rows && saved.header) { D = buildIndex(saved); afterData(); }
   else afterData();
