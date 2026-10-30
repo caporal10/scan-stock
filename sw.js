@@ -1,5 +1,5 @@
-// Cache de l'appli pour fonctionner sans réseau. Version : 9971711
-const CACHE = 'scanstock-9971711';
+// Cache de l'appli pour fonctionner sans réseau. Version : 29986933
+const CACHE = 'scanstock-29986933';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'vendor/xlsx.full.min.js', 'vendor/zxing.min.js', 'vendor/msal-browser.min.js', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

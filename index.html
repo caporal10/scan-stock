@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '30/10 10:12';</script>
+<script>window.APP_VERSION = '30/10 10:31';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -151,6 +151,7 @@ dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
 .pref{display:flex;flex-direction:column;gap:6px;padding:8px 0;border-bottom:1px solid var(--line)}
 .pref:last-child{border-bottom:0}
 .pref span{font-weight:500}
+.pill.lieu{background:var(--ink);color:var(--bg);border-color:transparent;text-transform:uppercase;letter-spacing:.06em}
 .livinfo{display:flex;flex-wrap:wrap;gap:6px}
 .notfound{background:var(--bad-bg);color:var(--bad);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:4px}
 .notfound b{font-family:var(--f-display);font-size:22px;text-transform:uppercase}
@@ -719,14 +720,21 @@ const KNOWN_COLS = new Set(['Enseigne','Socite','Magasin','Fournisseur','Modele'
 const DEFAULT_FIELDS = ['Article', 'Couleur', 'Magasin', '@dims', 'Fournisseur', 'Nom_Client', 'No_cde_client'];
 const fieldVal = (i, k) => k === '@dims' ? dims(i) : show(i, k);
 const monoKey = k => /No_|Ref_|BP_/.test(k);
+const LIEU = { D: 'Magasin', P: 'Dépôt' };
+function lieuPill(i) { const t = show(i, 'Type_Stock').toUpperCase(); return t ? `<span class="pill lieu">${esc(LIEU[t] || t)}</span>` : ''; }
+function statutLine(i) {
+  const e = show(i, 'Etat_Stock');
+  if (e === 'Livraison en cours' || !isEmpty(V(i, 'Date_BL'))) return livInfo(i) || `<div class="livinfo">${etatPill(i)}</div>`;
+  return e ? `<div class="livinfo">${etatPill(i)}</div>` : '';
+}
 function etatPill(i) { const e = show(i, 'Etat_Stock'); return e ? `<span class="pill ${ETAT_CLS[e] || ''}">${esc(e)}</span>` : ''; }
 function ficheHTML(i) {
   const e = show(i, 'Etat_Stock'), cls = ETAT_CLS[e] || '';
   const nat = show(i, 'Nature_stock');
   let h = `<article class="fiche" style="--st:${ETAT_VAR[cls] || 'var(--muted)'}"><div class="fiche-head">
-    <div class="fiche-top"><span class="ns">${esc(show(i,'No_Stock'))}</span>${etatPill(i)}${nat && nat !== 'STOCK' ? `<span class="pill bad">${esc(nat)}</span>` : ''}</div>
+    <div class="fiche-top"><span class="ns">${esc(show(i,'No_Stock'))}</span>${lieuPill(i)}${show(i,'Localite') ? `<span class="loc">${esc(show(i,'Localite'))}</span>` : ''}</div>
     <div class="modele">${esc(show(i,'Modele') || show(i,'Article') || 'Sans libellé')}</div>
-    ${livInfo(i)}
+    ${statutLine(i)}
   </div>`;
   const key = settings.fields.map(k => { const v = fieldVal(i, k); return v ? `<dt>${esc(FIELD_LABELS[k] || k)}</dt><dd${monoKey(k) ? ' class="mono"' : ''}>${esc(v)}</dd>` : ''; }).join('');
   if (key) h += `<section class="sec key"><dl>${key}</dl></section>`;
