@@ -11,6 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
+<script>window.APP_VERSION = '30/10 09:25';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -142,6 +143,8 @@ dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
 .bl .item{grid-template-columns:minmax(0,1fr) auto}
 .loc{font-family:var(--f-mono);font-size:12.5px;font-weight:600;background:var(--info-bg);color:var(--info);border-radius:6px;padding:4px 8px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .loc.vide{background:transparent;color:var(--muted);font-weight:400;font-family:var(--f-body);border:1px dashed var(--line)}
+.slot{font-family:var(--f-display);font-weight:700;font-size:17px;letter-spacing:.02em;background:var(--accent);color:var(--accent-ink);border-radius:6px;padding:2px 8px;align-self:center}
+.slot.vide{background:transparent;color:var(--muted);border:1px dashed var(--line);font-weight:600;font-size:13px}
 .livinfo{display:flex;flex-wrap:wrap;gap:6px}
 .notfound{background:var(--bad-bg);color:var(--bad);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:4px}
 .notfound b{font-family:var(--f-display);font-size:22px;text-transform:uppercase}
@@ -405,6 +408,11 @@ function buildIndex(data) {
   let lm = 0; ['Date_Dernier_Mouvement','date_entree_initiale','Date_Cde_Clientr','Date_cde_fourn'].forEach(k => { const c = col[k]; if (c == null) return; for (const r of data.rows) { const v = r[c]; if (typeof v === 'number' && v > lm) lm = v; } });
   data.lastMove = lm || null;
   data.dateCols = new Set(data.header.map((h, i) => /date/i.test(h) ? i : -1).filter(i => i >= 0));
+  // Créneau horaire : première colonne dont le nom contient « créneau », « horaire » ou « heure »
+  data.creneau = data.header.find(h => /cr[eé]neau|horaire|heure/i.test(h)) || null;
+  // Colonnes ajoutées au fichier (inconnues de l'appli) : proposées dans les réglages et la recherche
+  data.extra = data.header.filter(h => h && !KNOWN_COLS.has(h));
+  if (data.extra.length) data.rows.forEach((r, i) => { txt[i] += ' ' + norm(data.extra.map(h => r[col[h]] ?? '').join(' ')); });
   return data;
 }
 const V = (i, name) => { const c = D.col[name]; return c == null ? null : D.rows[i][c]; };
@@ -439,11 +447,21 @@ function livInfo(i) {
   if (n == null && !t) return '';
   let lbl = '';
   if (n != null) { const td = daySerial(new Date()), rel = Math.abs(n - td) <= 1; lbl = 'Livraison ' + (rel ? dayLabel(n).toLowerCase() + ' ' + fmtSerial(n, { day: '2-digit', month: '2-digit' }) : fmtSerial(n, { weekday: 'short', day: '2-digit', month: '2-digit', year: '2-digit' })); }
-  return `<div class="livinfo">${lbl ? `<span class="pill info">${esc(lbl)}</span>` : ''}${t ? `<span class="pill info">Tournée ${esc(t)}</span>` : ''}</div>`;
+  const cr = D.creneau ? show(i, D.creneau) : '';
+  return `<div class="livinfo">${lbl ? `<span class="pill info">${esc(lbl)}</span>` : ''}${t ? `<span class="pill info">Tournée ${esc(t)}</span>` : ''}${cr ? `<span class="pill info">Créneau ${esc(cr)}</span>` : ''}</div>`;
 }
 const fmtEUR = v => typeof v === 'number' ? v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) : String(v ?? '');
+const fmtTime = v => { const m = Math.round((v % 1) * 1440); return String(Math.floor(m / 60)).padStart(2, '0') + 'h' + String(m % 60).padStart(2, '0'); };
+function creneauMin(i) {
+  if (!D.creneau) return Infinity;
+  const v = V(i, D.creneau); if (isEmpty(v)) return Infinity;
+  if (typeof v === 'number') return v < 1 ? Math.round(v * 1440) : (v <= 24 ? v * 60 : Infinity);
+  const m = /(\d{1,2})\s*[h:]\s*(\d{2})?/i.exec(String(v)) || /^(\d{1,2})\b/.exec(String(v).trim());
+  return m ? (+m[1]) * 60 + (+(m[2] || 0)) : Infinity;
+}
 function show(i, name) {
   const v = V(i, name); if (isEmpty(v)) return '';
+  if (name === D.creneau && typeof v === 'number' && v < 1) return fmtTime(v);
   if (D.dateCols.has(D.col[name])) return fmtDate(v);
   if (name === 'Prix_revient') return fmtEUR(v);
   return String(v).trim();
@@ -688,6 +706,7 @@ const FIELD_LABELS = {
   No_cde_fourn:'N° cde fournisseur', Date_cde_fourn:'Date cde fournisseur', date_confirmation:'Confirmation fournisseur', Magasin_cde_fourn:'Magasin cde fournisseur', Intitule_cde_fourn:'Intitulé cde fournisseur',
   No_transfert:'N° transfert', Date_transfert:'Date transfert', Titre_transfert1:'Titre transfert', Titre_transfert2:'Titre transfert (suite)'
 };
+const KNOWN_COLS = new Set(['Enseigne','Socite','Magasin','Fournisseur','Modele','Article','Ref_Fourn','Categorie','Couleur','Dim_1','Dim_2','Dim_3','No_Stock','Etat_Stock','Type_Stock','date_entree_initiale','Date_Dernier_Mouvement','Prix_revient','Nature_stock','Complement_Stock','Localite','Scan_date','Famille','Sous_famille','No_cde_client','Date_Cde_Clientr','Nom_Client','BP_Cde_Client','No_BL','Date_BL','Tournee','Magasin_cde_fourn','No_cde_fourn','Date_cde_fourn','date_confirmation','Intitule_cde_fourn','No_transfert','Date_transfert','Titre_transfert1','Titre_transfert2']);
 const DEFAULT_FIELDS = ['Article', 'Couleur', 'Magasin', '@dims', 'Fournisseur', 'Nom_Client', 'No_cde_client'];
 const fieldVal = (i, k) => k === '@dims' ? dims(i) : show(i, k);
 const monoKey = k => /No_|Ref_|BP_/.test(k);
@@ -712,6 +731,8 @@ function ficheHTML(i) {
       }).filter(Boolean);
       if (items.length) h += `<section class="sec"><h3>${title}</h3><dl>${items.join('')}</dl></section>`;
     }
+    const autres = D.extra.map(k => { const v = show(i, k); return v ? `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>` : ''; }).join('');
+    if (autres) h += `<section class="sec"><h3>Autres infos</h3><dl>${autres}</dl></section>`;
     h += '</details>';
   }
   return h + '</article>';
@@ -1105,6 +1126,7 @@ function openSettings() {
       <label class="toggle"><span>Bip sonore au scan</span><input type="checkbox" id="set-son" ${settings.son ? 'checked' : ''}></label>
       <label class="toggle"><span>Vibration (Android)</span><input type="checkbox" id="set-vib" ${settings.vib ? 'checked' : ''}></label>
     </div>
+    <p class="hint" style="text-align:center">Version de l\u2019appli : <span class="mono">${esc(window.APP_VERSION || 'dev')}</span></p>
     <div class="panel"><h3>Mode de scan</h3><p class="lead">${liveOK ? 'Caméra en direct disponible.' : "Dans cette vue, la caméra en direct n'est pas autorisée : le scan passe par une photo. Une douchette Bluetooth fonctionne aussi dans le champ de saisie."}</p></div>`);
   $('#set-reload').onclick = () => { closeSheet(); pickFile(); };
   $('#set-clear').onclick = async () => { await idb.del('data'); D = null; closeSheet(); afterData(); toast('Données retirées'); };
@@ -1116,14 +1138,14 @@ function openSettings() {
 }
 function renderFieldEditor() {
   const el = $('#fld-editor'); if (!el) return;
-  const sel = settings.fields, rest = Object.keys(FIELD_LABELS).filter(k => !sel.includes(k));
+  const sel = settings.fields, rest = [...Object.keys(FIELD_LABELS), ...(D ? D.extra : [])].filter(k => !sel.includes(k));
   el.innerHTML = `
     <div class="list">${sel.length ? sel.map((k, n) => `<div class="item fld"><span class="t">${esc(FIELD_LABELS[k] || k)}</span><span class="r">
       <button class="x" data-fup="${n}" aria-label="Monter" ${n === 0 ? 'disabled' : ''}>↑</button>
       <button class="x" data-fdown="${n}" aria-label="Descendre" ${n === sel.length - 1 ? 'disabled' : ''}>↓</button>
       <button class="x" data-fdel="${n}" aria-label="Retirer">✕</button></span></div>`).join('') : '<div class="empty">Aucune info : la fiche n’affichera que le N° de stock, l’état et le modèle.</div>'}</div>
     <h3 style="margin-top:6px">Ajouter</h3>
-    <div class="chips">${rest.map(k => `<button class="chip" data-fadd="${esc(k)}">+ ${esc(FIELD_LABELS[k])}</button>`).join('')}</div>
+    <div class="chips">${rest.map(k => `<button class="chip" data-fadd="${esc(k)}">+ ${esc(FIELD_LABELS[k] || k)}</button>`).join('')}</div>
     <button class="btn" id="fld-reset" style="align-self:flex-start;min-height:38px">Rétablir le choix par défaut</button>`;
   const upd = () => { saveSettings(); renderFieldEditor(); refreshFiche(); };
   el.querySelectorAll('[data-fup]').forEach(b => b.onclick = () => { const n = +b.dataset.fup; [sel[n - 1], sel[n]] = [sel[n], sel[n - 1]]; upd(); });
@@ -1175,9 +1197,11 @@ function renderLiv() {
   const html = tourNames.filter(t => !livTour || t === livTour).map(t => {
     const bls = new Map();
     tours.get(t).forEach(i => { const k = show(i, 'No_BL') || 'i' + i; if (!bls.has(k)) bls.set(k, []); bls.get(k).push(i); });
-    const blHTML = [...bls.entries()].sort((a, b) => (show(a[1][0], 'Nom_Client') || '').localeCompare(show(b[1][0], 'Nom_Client') || '', 'fr')).map(([k, is]) => {
-      const f = is[0];
-      return `<div class="bl"><div class="bl-h"><span class="cli">${esc(show(f, 'Nom_Client') || 'Client non renseigné')}</span><span class="meta">${show(f, 'No_BL') ? 'BL <span class="mono">' + esc(show(f, 'No_BL')) + '</span> · ' : ''}${show(f, 'No_cde_client') ? 'Cde <span class="mono">' + esc(show(f, 'No_cde_client')) + '</span> · ' : ''}${esc(show(f, 'Magasin'))}</span></div>
+    const slot = is => Math.min(...is.map(creneauMin));
+    const blHTML = [...bls.entries()].sort((a, b) => (slot(a[1]) - slot(b[1])) || (show(a[1][0], 'Nom_Client') || '').localeCompare(show(b[1][0], 'Nom_Client') || '', 'fr')).map(([k, is], n) => {
+      const f = is.find(i => isFinite(creneauMin(i))) ?? is[0];
+      const cr = D.creneau ? show(f, D.creneau) : '';
+      return `<div class="bl"><div class="bl-h">${D.creneau ? `<span class="slot${cr ? '' : ' vide'}">${cr ? esc(cr) : 'Créneau ?'}</span>` : ''}<span class="cli">${esc(show(f, 'Nom_Client') || 'Client non renseigné')}</span><span class="meta">${show(f, 'No_BL') ? 'BL <span class="mono">' + esc(show(f, 'No_BL')) + '</span> · ' : ''}${show(f, 'No_cde_client') ? 'Cde <span class="mono">' + esc(show(f, 'No_cde_client')) + '</span> · ' : ''}${esc(show(f, 'Magasin'))}</span></div>
         ${is.map(i => `<button class="item" data-fiche="${i}"><span class="t">${esc(show(i, 'Modele') || show(i, 'Article'))}</span><span class="m"><span class="mono">${esc(show(i, 'No_Stock'))}</span>${show(i, 'Article') && show(i, 'Modele') ? ' · ' + esc(show(i, 'Article')) : ''}</span><span class="r">${show(i, 'Etat_Stock') !== 'Livraison en cours' ? etatPill(i) : ''}<span class="loc${show(i, 'Localite') ? '' : ' vide'}">${esc(show(i, 'Localite') || 'Sans localité')}</span></span></button>`).join('')}</div>`;
     }).join('');
     return `<section class="tournee"><div class="tournee-h"><h2>${esc(t)}</h2><span class="count">${bls.size} livraison${bls.size > 1 ? 's' : ''} · ${tours.get(t).length} article${tours.get(t).length > 1 ? 's' : ''}</span></div>${blHTML}</section>`;
