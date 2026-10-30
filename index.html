@@ -139,6 +139,9 @@ dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
 .bl-h .meta{color:var(--muted);font-size:12.5px}
 .bl .item{border-bottom:1px solid var(--line)}
 .bl .item:last-child{border-bottom:0}
+.bl .item{grid-template-columns:minmax(0,1fr) auto}
+.loc{font-family:var(--f-mono);font-size:12.5px;font-weight:600;background:var(--info-bg);color:var(--info);border-radius:6px;padding:4px 8px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.loc.vide{background:transparent;color:var(--muted);font-weight:400;font-family:var(--f-body);border:1px dashed var(--line)}
 .livinfo{display:flex;flex-wrap:wrap;gap:6px}
 .notfound{background:var(--bad-bg);color:var(--bad);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:4px}
 .notfound b{font-family:var(--f-display);font-size:22px;text-transform:uppercase}
@@ -1175,7 +1178,7 @@ function renderLiv() {
     const blHTML = [...bls.entries()].sort((a, b) => (show(a[1][0], 'Nom_Client') || '').localeCompare(show(b[1][0], 'Nom_Client') || '', 'fr')).map(([k, is]) => {
       const f = is[0];
       return `<div class="bl"><div class="bl-h"><span class="cli">${esc(show(f, 'Nom_Client') || 'Client non renseigné')}</span><span class="meta">${show(f, 'No_BL') ? 'BL <span class="mono">' + esc(show(f, 'No_BL')) + '</span> · ' : ''}${show(f, 'No_cde_client') ? 'Cde <span class="mono">' + esc(show(f, 'No_cde_client')) + '</span> · ' : ''}${esc(show(f, 'Magasin'))}</span></div>
-        ${is.map(i => `<button class="item" data-fiche="${i}"><span class="t">${esc(show(i, 'Modele') || show(i, 'Article'))}</span><span class="m"><span class="mono">${esc(show(i, 'No_Stock'))}</span>${show(i, 'Article') && show(i, 'Modele') ? ' · ' + esc(show(i, 'Article')) : ''}</span><span class="r">${show(i, 'Etat_Stock') !== 'Livraison en cours' ? etatPill(i) : ''}</span></button>`).join('')}</div>`;
+        ${is.map(i => `<button class="item" data-fiche="${i}"><span class="t">${esc(show(i, 'Modele') || show(i, 'Article'))}</span><span class="m"><span class="mono">${esc(show(i, 'No_Stock'))}</span>${show(i, 'Article') && show(i, 'Modele') ? ' · ' + esc(show(i, 'Article')) : ''}</span><span class="r">${show(i, 'Etat_Stock') !== 'Livraison en cours' ? etatPill(i) : ''}<span class="loc${show(i, 'Localite') ? '' : ' vide'}">${esc(show(i, 'Localite') || 'Sans localité')}</span></span></button>`).join('')}</div>`;
     }).join('');
     return `<section class="tournee"><div class="tournee-h"><h2>${esc(t)}</h2><span class="count">${bls.size} livraison${bls.size > 1 ? 's' : ''} · ${tours.get(t).length} article${tours.get(t).length > 1 ? 's' : ''}</span></div>${blHTML}</section>`;
   }).join('');
