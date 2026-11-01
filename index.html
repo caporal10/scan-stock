@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '01/11 20:56';</script>
+<script>window.APP_VERSION = '01/11 21:10';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -668,26 +668,42 @@ const liveOK = !inFrame && window.isSecureContext && !!(navigator.mediaDevices &
 let stream = null, scanning = false, camCtx = 'scan', lastLive = { code: '', t: 0 }, wakeLock = null;
 const liveCv = document.createElement('canvas'), liveG = liveCv.getContext('2d', { willReadFrequently: true });
 
+// La caméra reste ouverte en arrière-plan entre deux scans (iPhone redemande l'autorisation à chaque nouvelle ouverture).
+// Elle est coupée après 5 minutes sans scan, ou quand l'appli passe en arrière-plan.
+let camIdleT = 0;
+const CAM_IDLE_MS = 5 * 60000;
+const streamAlive = () => !!(stream && stream.getVideoTracks().some(t => t.readyState === 'live'));
 async function startLive(ctx) {
   ensureAudio(); camCtx = ctx; lastLive = { code: '', t: 0 };
+  clearTimeout(camIdleT);
   $('#cam').hidden = false; renderCamHud();
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
-    const v = $('#video'); v.srcObject = stream; await v.play();
-    const track = stream.getVideoTracks()[0];
-    try { const caps = track.getCapabilities ? track.getCapabilities() : {}; $('#cam-torch').hidden = !caps.torch; if (caps.focusMode && caps.focusMode.includes('continuous')) track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {}); } catch (e) {}
+    if (!streamAlive()) {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
+      const track = stream.getVideoTracks()[0];
+      try { const caps = track.getCapabilities ? track.getCapabilities() : {}; $('#cam-torch').hidden = !caps.torch; if (caps.focusMode && caps.focusMode.includes('continuous')) track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {}); } catch (e) {}
+    }
+    const v = $('#video'); if (v.srcObject !== stream) v.srcObject = stream; await v.play();
     try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
     scanning = true; tick();
   } catch (e) {
-    stopLive(); toast("Caméra indisponible. Utilisez le mode photo.");
+    releaseCam(); $('#cam').hidden = true; toast("Caméra indisponible. Utilisez le mode photo.");
   }
+}
+function releaseCam() {
+  clearTimeout(camIdleT);
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  try { $('#video').srcObject = null; } catch (e) {}
 }
 function stopLive() {
   scanning = false;
-  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
   try { wakeLock && wakeLock.release(); } catch (e) {} wakeLock = null;
+  if (torchOn && stream) { try { stream.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: false }] }); } catch (e) {} }
   $('#cam').hidden = true; torchOn = false;
+  try { $('#video').pause(); } catch (e) {}
+  clearTimeout(camIdleT); camIdleT = setTimeout(releaseCam, CAM_IDLE_MS);
 }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { if (!$('#cam').hidden) stopLive(); releaseCam(); } });
 async function tick() {
   if (!scanning) return;
   const v = $('#video');
