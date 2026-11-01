@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '30/10 22:14';</script>
+<script>window.APP_VERSION = '01/11 20:56';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -144,7 +144,7 @@ dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
 .bl .item{border-bottom:1px solid var(--line)}
 .bl .item:last-child{border-bottom:0}
 .bl .item{grid-template-columns:minmax(0,1fr) auto}
-.loc{font-family:var(--f-mono);font-size:12.5px;font-weight:600;background:var(--info-bg);color:var(--info);border-radius:6px;padding:4px 8px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.loc{font-family:var(--f-mono);font-size:12px;font-weight:600;background:var(--info-bg);color:var(--info);border-radius:6px;padding:4px 7px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .loc.vide{background:transparent;color:var(--muted);font-weight:400;font-family:var(--f-body);border:1px dashed var(--line)}
 .slot{font-family:var(--f-display);font-weight:700;font-size:17px;letter-spacing:.02em;background:var(--accent);color:var(--accent-ink);border-radius:6px;padding:2px 8px;align-self:center}
 .slot.vide{background:transparent;color:var(--muted);border:1px dashed var(--line);font-weight:600;font-size:13px}
@@ -452,7 +452,9 @@ function buildIndex(data) {
   data.lastMove = lm || null;
   data.dateCols = new Set(data.header.map((h, i) => /date/i.test(h) ? i : -1).filter(i => i >= 0));
   // Créneau horaire : première colonne dont le nom contient « créneau », « horaire » ou « heure »
-  data.creneau = data.header.find(h => /cr[eé]neau|horaire|heure/i.test(h)) || null;
+  // Créneau : colonne de début (heure_debut, creneau, horaire…) et, si elle existe, colonne de fin (heure_fin)
+  data.creneau = data.header.find(h => /heure.?d[eé]but|cr[eé]neau|horaire/i.test(h)) || data.header.find(h => /heure/i.test(h) && !/fin/i.test(h)) || null;
+  data.creneauFin = data.header.find(h => /heure.?fin|cr[eé]neau.?fin/i.test(h) && h !== data.creneau) || null;
   // Colonnes ajoutées au fichier (inconnues de l'appli) : proposées dans les réglages et la recherche
   data.extra = data.header.filter(h => h && !KNOWN_COLS.has(h));
   if (data.extra.length) data.rows.forEach((r, i) => { txt[i] += ' ' + norm(data.extra.map(h => r[col[h]] ?? '').join(' ')); });
@@ -490,21 +492,29 @@ function livInfo(i) {
   if (n == null && !t) return '';
   let lbl = '';
   if (n != null) { const td = daySerial(new Date()), rel = Math.abs(n - td) <= 1; lbl = 'Livraison ' + (rel ? dayLabel(n).toLowerCase() + ' ' + fmtSerial(n, { day: '2-digit', month: '2-digit' }) : fmtSerial(n, { weekday: 'short', day: '2-digit', month: '2-digit', year: '2-digit' })); }
-  const cr = D.creneau ? show(i, D.creneau) : '';
+  const cr = slotText(i);
   return `<div class="livinfo">${lbl ? `<span class="pill info">${esc(lbl)}</span>` : ''}${t ? `<span class="pill info">Tournée ${esc(t)}</span>` : ''}${cr ? `<span class="pill info">Créneau ${esc(cr)}</span>` : ''}</div>`;
 }
 const fmtEUR = v => typeof v === 'number' ? v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) : String(v ?? '');
 const fmtTime = v => { const m = Math.round((v % 1) * 1440); return String(Math.floor(m / 60)).padStart(2, '0') + 'h' + String(m % 60).padStart(2, '0'); };
+const isTimeCol = name => !!name && (name === D.creneau || name === D.creneauFin);
+// Heure Excel : fraction de jour (0,5 = 12h, ou 1,5 si la date 01/01/1900 est collée) ; un entier ≤ 24 = heures
+const timeMin = v => typeof v !== 'number' ? null : (Number.isInteger(v) ? (v <= 24 ? v * 60 : null) : Math.round((v % 1) * 1440));
+function slotText(i) {
+  if (!D.creneau) return '';
+  const a = show(i, D.creneau), b = D.creneauFin ? show(i, D.creneauFin) : '';
+  return a && b && a !== b ? a + ' – ' + b : a;
+}
 function creneauMin(i) {
   if (!D.creneau) return Infinity;
   const v = V(i, D.creneau); if (isEmpty(v)) return Infinity;
-  if (typeof v === 'number') return v < 1 ? Math.round(v * 1440) : (v <= 24 ? v * 60 : Infinity);
+  if (typeof v === 'number') { const m = timeMin(v); return m == null ? Infinity : m; }
   const m = /(\d{1,2})\s*[h:]\s*(\d{2})?/i.exec(String(v)) || /^(\d{1,2})\b/.exec(String(v).trim());
   return m ? (+m[1]) * 60 + (+(m[2] || 0)) : Infinity;
 }
 function show(i, name) {
   const v = V(i, name); if (isEmpty(v)) return '';
-  if (name === D.creneau && typeof v === 'number' && v < 1) return fmtTime(v);
+  if (isTimeCol(name) && typeof v === 'number') { const m = timeMin(v); if (m != null) return String(Math.floor(m / 60)).padStart(2, '0') + 'h' + String(m % 60).padStart(2, '0'); }
   if (D.dateCols.has(D.col[name])) return fmtDate(v);
   if (name === 'Prix_revient') return fmtEUR(v);
   return String(v).trim();
@@ -1415,8 +1425,10 @@ function renderLiv() {
     : (i => sc.names.has(norm(show(i, 'Magasin'))));
   const inLiv = i => ensOK(i) && inLiv0(i);
   $('#liv-scope').innerHTML = scopeBar('liv');
-  const up = [...byDay.keys()].filter(n => n >= today && byDay.get(n).some(inLiv)).sort((a, b) => a - b).slice(0, 8);
-  $('#liv-upcoming').innerHTML = up.length ? up.map(n => `<button class="chip" data-day="${n}" aria-pressed="${n === livDay}">${esc(n === today ? 'Auj.' : n === today + 1 ? 'Demain' : fmtSerial(n, { weekday: 'short', day: '2-digit', month: '2-digit' }))} · <b>${new Set(byDay.get(n).filter(inLiv).map(i => show(i, 'No_BL') || 'i' + i)).size}</b></button>`).join('') : '<span class="hint">Aucune livraison à venir dans le fichier.</span>';
+  // Raccourcis : seulement les jours (avec livraisons) de la semaine du jour affiché, du lundi au samedi
+  const lundi = livDay - ((serialDate(livDay).getDay() + 6) % 7);
+  const up = [0, 1, 2, 3, 4, 5].map(k => lundi + k).filter(n => byDay.has(n) && byDay.get(n).some(inLiv));
+  $('#liv-upcoming').innerHTML = up.length ? up.map(n => `<button class="chip" data-day="${n}" aria-pressed="${n === livDay}">${esc(n === today ? 'Auj.' : n === today + 1 ? 'Demain' : fmtSerial(n, { weekday: 'short', day: '2-digit', month: '2-digit' }))} · <b>${new Set(byDay.get(n).filter(inLiv).map(i => show(i, 'No_BL') || 'i' + i)).size}</b></button>`).join('') : '<span class="hint">Aucune livraison cette semaine. Utilisez les flèches ou touchez la date pour changer de jour.</span>';
   const items = (byDay.get(livDay) || []).filter(inLiv);
   // tournées du jour
   const tours = new Map(); items.forEach(i => { const t = show(i, 'Tournee') || 'Sans tournée'; if (!tours.has(t)) tours.set(t, []); tours.get(t).push(i); });
@@ -1435,7 +1447,7 @@ function renderLiv() {
     const slot = is => Math.min(...is.map(creneauMin));
     const blHTML = [...bls.entries()].sort((a, b) => (slot(a[1]) - slot(b[1])) || (show(a[1][0], 'Nom_Client') || '').localeCompare(show(b[1][0], 'Nom_Client') || '', 'fr')).map(([k, is], n) => {
       const f = is.find(i => isFinite(creneauMin(i))) ?? is[0];
-      const cr = D.creneau ? show(f, D.creneau) : '';
+      const cr = slotText(f);
       return `<div class="bl"><div class="bl-h">${D.creneau ? `<span class="slot${cr ? '' : ' vide'}">${cr ? esc(cr) : 'Créneau ?'}</span>` : ''}<span class="cli">${esc(show(f, 'Nom_Client') || 'Client non renseigné')}</span><span class="meta">${show(f, 'No_BL') ? 'BL <span class="mono">' + esc(show(f, 'No_BL')) + '</span> · ' : ''}${show(f, 'No_cde_client') ? 'Cde <span class="mono">' + esc(show(f, 'No_cde_client')) + '</span> · ' : ''}${esc(show(f, 'Magasin'))}</span></div>
         ${is.map(i => `<button class="item" data-fiche="${i}"><span class="t">${esc(show(i, 'Modele') || show(i, 'Article'))}</span><span class="m"><span class="mono">${esc(show(i, 'No_Stock'))}</span>${show(i, 'Article') && show(i, 'Modele') ? ' · ' + esc(show(i, 'Article')) : ''}</span><span class="r">${show(i, 'Etat_Stock') !== 'Livraison en cours' ? etatPill(i) : ''}<span class="loc${show(i, 'Localite') ? '' : ' vide'}">${esc(show(i, 'Localite') || 'Sans localité')}</span></span></button>`).join('')}</div>`;
     }).join('');

@@ -1,7 +1,6 @@
 {
   "name": "Scan Stock",
   "short_name": "Scan Stock",
-  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
