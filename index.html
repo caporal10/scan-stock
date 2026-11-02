@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '01/11 21:10';</script>
+<script>window.APP_VERSION = '02/11 10:43';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -174,6 +174,9 @@ dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
 .scope .chip{background:var(--surface);color:var(--ink)}
 .linkbox{font-size:12px;word-break:break-all;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px;user-select:all;-webkit-user-select:all}
 .pill.cde{background:var(--ink);color:var(--bg);border-color:transparent;font-size:13.5px}
+.magpick{display:flex;flex-direction:column;gap:6px}
+.chip.add{border-style:dashed;color:var(--accent);font-weight:600}
+.magrest{padding:8px;background:var(--surface-2);border-radius:8px}
 .livinfo{display:flex;flex-wrap:wrap;gap:6px}
 .notfound{background:var(--bad-bg);color:var(--bad);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:4px}
 .notfound b{font-family:var(--f-display);font-size:22px;text-transform:uppercase}
@@ -338,8 +341,8 @@ body.noscroll{overflow:hidden}
     <section class="view" id="v-search" hidden>
       <div class="panel">
         <div class="field"><input id="in-q" type="search" placeholder="Client, modèle, fournisseur, n° de commande…" aria-label="Recherche" autocomplete="off"></div>
+        <div class="magpick" id="f-mags" aria-label="Magasins"></div>
         <div class="row">
-          <select id="f-mag" aria-label="Magasin" style="flex:1 1 160px"></select>
           <select id="f-etat" aria-label="État du stock" style="flex:1 1 160px"></select>
         </div>
         <div class="seg" id="f-lieu" role="group" aria-label="Magasin ou dépôt">
@@ -873,24 +876,48 @@ function fillFilters() {
   const cm = D.col.Magasin, ce = D.col.Etat_Stock;
   D.rows.forEach((r, i) => { if (!ensOK(i)) return; mags.set(r[cm], (mags.get(r[cm]) || 0) + 1); etats.set(r[ce], (etats.get(r[ce]) || 0) + 1); });
   const opt = (m, all) => `<option value="">${all}</option>` + [...m.entries()].filter(([k]) => !isEmpty(k)).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<option value="${esc(k)}">${esc(k)} (${n.toLocaleString('fr-FR')})</option>`).join('');
-  $('#f-mag').innerHTML = opt(mags, profil().ens ? 'Tous les magasins ' + ensLabel() : 'Tous les magasins'); $('#f-etat').innerHTML = opt(etats, 'Tous les états');
-  const p = profil(), own = p.ens ? MAGS[p.mags[0]] : '';
-  const def = settings.searchMag && mags.has(settings.searchMag) ? settings.searchMag : (own && mags.has(own) ? own : '');
-  if (def) $('#f-mag').value = def;
+  $('#f-etat').innerHTML = opt(etats, 'Tous les états');
+  magCounts = mags;
+  // Magasins cochés d'office : ceux du profil (aucun = tous)
+  const p = profil(), names = new Set([...mags.keys()].filter(k => !isEmpty(k)));
+  searchMags = new Set((p.mags || []).map(k => MAGS[k]).filter(n => names.has(n)));
+  magOpen = false; renderMagPick();
 }
+let searchMags = new Set(), magCounts = new Map(), magOpen = false;
+function renderMagPick() {
+  const el = $('#f-mags'); if (!el) return;
+  const all = [...magCounts.entries()].filter(([k]) => !isEmpty(k)).sort((a, b) => String(a[0]).localeCompare(String(b[0]), 'fr'));
+  const sel = all.filter(([k]) => searchMags.has(k)), rest = all.filter(([k]) => !searchMags.has(k));
+  const allLabel = profil().ens ? 'Tous les magasins ' + ensLabel() : 'Tous les magasins';
+  el.innerHTML = `<div class="chips">
+      ${sel.length ? sel.map(([k, n]) => `<button type="button" class="chip" aria-pressed="true" data-mag-off="${esc(k)}" title="Retirer">${esc(k)} <b>${n.toLocaleString('fr-FR')}</b> ✕</button>`).join('') : `<button type="button" class="chip" aria-pressed="true">${esc(allLabel)}</button>`}
+      ${rest.length ? `<button type="button" class="chip add" data-mag-toggle>${magOpen ? 'Fermer' : '+ Magasin'}</button>` : ''}
+      ${sel.length ? `<button type="button" class="chip" data-mag-all>${esc(allLabel)}</button>` : ''}
+    </div>
+    ${magOpen && rest.length ? `<div class="chips magrest">${rest.map(([k, n]) => `<button type="button" class="chip" data-mag-on="${esc(k)}">+ ${esc(k)} <b>${n.toLocaleString('fr-FR')}</b></button>`).join('')}</div>` : ''}`;
+}
+$('#f-mags').addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.magOff != null) searchMags.delete(t.dataset.magOff);
+  else if (t.dataset.magOn != null) searchMags.add(t.dataset.magOn);
+  else if (t.hasAttribute('data-mag-all')) { searchMags.clear(); magOpen = false; }
+  else if (t.hasAttribute('data-mag-toggle')) magOpen = !magOpen;
+  else return;
+  renderMagPick(); runSearch();
+});
 let qT = 0;
 function runSearch() {
   if (!D) return;
   if (document.activeElement && document.activeElement.id === 'in-q') autoRefresh();
-  const q = norm($('#in-q').value).split(/\s+/).filter(Boolean), m = $('#f-mag').value, et = $('#f-etat').value, li = searchLieu;
+  const q = norm($('#in-q').value).split(/\s+/).filter(Boolean), et = $('#f-etat').value, li = searchLieu;
   const res = $('#q-res'), cnt = $('#q-count');
-  if (!q.length && !m && !et && !li) { cnt.textContent = ''; res.innerHTML = '<div class="empty">Tapez un nom de client, un modèle, un fournisseur, un n° de commande ou de BL. Plusieurs mots se combinent, par exemple « canape cuir ». Utilisez les filtres pour le magasin et l’état.</div>'; return; }
+  if (!q.length && !et && !li) { cnt.textContent = ''; res.innerHTML = '<div class="empty">Tapez un nom de client, un modèle, un fournisseur, un n° de commande ou de BL. Plusieurs mots se combinent, par exemple « canape cuir ». Les magasins de votre profil sont cochés : touchez « + Magasin » pour en ajouter.</div>'; return; }
   const cm = D.col.Magasin, ce = D.col.Etat_Stock, ct = D.col.Type_Stock, out = [];
   let n = 0;
   for (let i = 0; i < D.rows.length; i++) {
     const r = D.rows[i];
     if (!ensOK(i)) continue;
-    if (m && r[cm] !== m) continue; if (et && r[ce] !== et) continue;
+    if (searchMags.size && !searchMags.has(r[cm])) continue; if (et && r[ce] !== et) continue;
     if (li && String(r[ct] ?? '').trim().toUpperCase() !== li) continue;
     const t = D.txt[i]; if (!q.every(w => t.includes(w))) continue;
     n++; if (out.length < 80) out.push(i);
@@ -899,7 +926,7 @@ function runSearch() {
   res.innerHTML = out.length ? out.map(i => `<button class="item" data-fiche="${i}"><span class="t">${esc(show(i,'Modele') || show(i,'Article'))}</span><span class="m"><span class="mono">${esc(show(i,'No_Stock'))}</span> · ${esc(show(i,'Magasin'))}${LIEU[show(i,'Type_Stock').toUpperCase()] ? ' · ' + LIEU[show(i,'Type_Stock').toUpperCase()] : ''}${show(i,'Nom_Client') ? ' · ' + esc(show(i,'Nom_Client')) : ''}${show(i,'Date_Cde_Clientr') && show(i,'Etat_Stock') !== 'Disponible' ? ' · cde ' + esc(show(i,'Date_Cde_Clientr')) : ''}</span><span class="r">${etatPill(i)}</span></button>`).join('') : '<div class="empty">Aucun article ne correspond.</div>';
 }
 $('#in-q').addEventListener('input', () => { clearTimeout(qT); qT = setTimeout(runSearch, 150); });
-$('#f-mag').addEventListener('change', runSearch); $('#f-etat').addEventListener('change', runSearch);
+$('#f-etat').addEventListener('change', runSearch);
 let searchLieu = '';
 $('#f-lieu').addEventListener('click', e => { const b = e.target.closest('[data-lieu]'); if (!b) return; searchLieu = b.dataset.lieu; $('#f-lieu').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); runSearch(); });
 
@@ -1313,7 +1340,6 @@ function prefsHTML() {
     <p class="hint">Prêts et Livraisons s’affichent filtrés sur votre périmètre : un dépôt voit ses tournées complètes, un magasin ses propres clients. Un magasin ne voit que le stock de son enseigne (Cuir Center ou Roche Bobois).</p>
     <label class="pref"><span>Livraison : tournée par défaut</span><select id="set-livtour">${o(tours, settings.livTour, 'Toutes les tournées')}</select></label>
     <label class="pref"><span>Livraison : jour à l\u2019ouverture</span><select id="set-livjour"><option value="demain" ${settings.livJour !== 'auj' ? 'selected' : ''}>Demain</option><option value="auj" ${settings.livJour === 'auj' ? 'selected' : ''}>Aujourd\u2019hui</option></select></label>
-    <label class="pref"><span>Recherche : magasin par défaut</span><select id="set-mag">${o(mags, settings.searchMag, 'Tous les magasins')}</select></label>
   </div>
   <div class="panel" id="lock-panel">
     <h3>Verrouillage administrateur</h3>
@@ -1379,7 +1405,6 @@ function openSettings() {
     $('#set-profil').onchange = e => { settings.profil = e.target.value; saveSettings(); scopeOn = true; livTour = livDefaultTour(); if (D) fillFilters(); render(); };
     $('#set-livtour').onchange = e => { settings.livTour = e.target.value; saveSettings(); livTour = livDefaultTour(); };
     $('#set-livjour').onchange = e => { settings.livJour = e.target.value; saveSettings(); livDay = null; };
-    $('#set-mag').onchange = e => { settings.searchMag = e.target.value; saveSettings(); $('#f-mag').value = settings.searchMag; };
   }
   $('#set-details').onchange = e => { settings.details = e.target.checked; saveSettings(); refreshFiche(); };
   renderFieldEditor();
