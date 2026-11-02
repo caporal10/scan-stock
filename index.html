@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '02/11 10:43';</script>
+<script>window.APP_VERSION = '02/11 10:46';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -174,7 +174,19 @@ dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
 .scope .chip{background:var(--surface);color:var(--ink)}
 .linkbox{font-size:12px;word-break:break-all;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px;user-select:all;-webkit-user-select:all}
 .pill.cde{background:var(--ink);color:var(--bg);border-color:transparent;font-size:13.5px}
-.magpick{display:flex;flex-direction:column;gap:6px}
+.magpick{display:flex;flex-direction:column}
+.dd{border:1px solid var(--line);border-radius:8px;background:var(--surface-2)}
+.dd summary{list-style:none;display:flex;align-items:center;gap:10px;padding:10px 12px;min-height:44px;cursor:pointer}
+.dd summary::-webkit-details-marker{display:none}
+.dd-l{color:var(--muted);font-size:13px;flex:none}
+.dd-v{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dd[open] .chev{transform:rotate(-135deg);margin-top:4px}
+.dd-body{border-top:1px solid var(--line);max-height:300px;overflow-y:auto;padding:6px 4px}
+.dd-quick{display:flex;flex-wrap:wrap;gap:6px;padding:4px 8px 8px}
+.dd-opt{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:6px;cursor:pointer}
+.dd-opt input{width:20px;height:20px;accent-color:var(--accent);flex:none}
+.dd-opt span{flex:1;min-width:0}
+.dd-opt em{font-style:normal;color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
 .chip.add{border-style:dashed;color:var(--accent);font-weight:600}
 .magrest{padding:8px;background:var(--surface-2);border-radius:8px}
 .livinfo{display:flex;flex-wrap:wrap;gap:6px}
@@ -887,21 +899,31 @@ let searchMags = new Set(), magCounts = new Map(), magOpen = false;
 function renderMagPick() {
   const el = $('#f-mags'); if (!el) return;
   const all = [...magCounts.entries()].filter(([k]) => !isEmpty(k)).sort((a, b) => String(a[0]).localeCompare(String(b[0]), 'fr'));
-  const sel = all.filter(([k]) => searchMags.has(k)), rest = all.filter(([k]) => !searchMags.has(k));
-  const allLabel = profil().ens ? 'Tous les magasins ' + ensLabel() : 'Tous les magasins';
-  el.innerHTML = `<div class="chips">
-      ${sel.length ? sel.map(([k, n]) => `<button type="button" class="chip" aria-pressed="true" data-mag-off="${esc(k)}" title="Retirer">${esc(k)} <b>${n.toLocaleString('fr-FR')}</b> ✕</button>`).join('') : `<button type="button" class="chip" aria-pressed="true">${esc(allLabel)}</button>`}
-      ${rest.length ? `<button type="button" class="chip add" data-mag-toggle>${magOpen ? 'Fermer' : '+ Magasin'}</button>` : ''}
-      ${sel.length ? `<button type="button" class="chip" data-mag-all>${esc(allLabel)}</button>` : ''}
+  const p = profil(), own = (p.mags || []).map(k => MAGS[k]);
+  const allLabel = p.ens ? 'Tous les magasins ' + ensLabel() : 'Tous les magasins';
+  const sel = all.filter(([k]) => searchMags.has(k)).map(([k]) => k);
+  const resume = !sel.length ? allLabel : sel.length === own.length && own.every(n => searchMags.has(n)) && p.mags ? p.label + (sel.length > 1 ? ` (${sel.length})` : '') : sel.length <= 2 ? sel.join(', ') : `${sel.length} magasins`;
+  el.innerHTML = `<details class="dd" ${magOpen ? 'open' : ''}>
+    <summary><span class="dd-l">Magasins</span><span class="dd-v">${esc(resume)}</span><span class="chev" aria-hidden="true"></span></summary>
+    <div class="dd-body">
+      <div class="dd-quick">
+        <button type="button" class="chip" data-mag-all aria-pressed="${!sel.length}">${esc(allLabel)}</button>
+        ${p.mags ? `<button type="button" class="chip" data-mag-mine>${esc(p.label)}</button>` : ''}
+      </div>
+      ${all.map(([k, n]) => `<label class="dd-opt"><input type="checkbox" data-mag="${esc(k)}" ${searchMags.has(k) ? 'checked' : ''}><span>${esc(k)}</span><em>${n.toLocaleString('fr-FR')}</em></label>`).join('')}
     </div>
-    ${magOpen && rest.length ? `<div class="chips magrest">${rest.map(([k, n]) => `<button type="button" class="chip" data-mag-on="${esc(k)}">+ ${esc(k)} <b>${n.toLocaleString('fr-FR')}</b></button>`).join('')}</div>` : ''}`;
+  </details>`;
+  el.querySelector('details').addEventListener('toggle', e => { magOpen = e.target.open; });
 }
+$('#f-mags').addEventListener('change', e => {
+  const c = e.target.closest('input[data-mag]'); if (!c) return;
+  if (c.checked) searchMags.add(c.dataset.mag); else searchMags.delete(c.dataset.mag);
+  renderMagPick(); runSearch();
+});
 $('#f-mags').addEventListener('click', e => {
   const t = e.target.closest('button'); if (!t) return;
-  if (t.dataset.magOff != null) searchMags.delete(t.dataset.magOff);
-  else if (t.dataset.magOn != null) searchMags.add(t.dataset.magOn);
-  else if (t.hasAttribute('data-mag-all')) { searchMags.clear(); magOpen = false; }
-  else if (t.hasAttribute('data-mag-toggle')) magOpen = !magOpen;
+  if (t.hasAttribute('data-mag-all')) searchMags.clear();
+  else if (t.hasAttribute('data-mag-mine')) { const names = new Set(magCounts.keys()); searchMags = new Set((profil().mags || []).map(k => MAGS[k]).filter(n => names.has(n))); }
   else return;
   renderMagPick(); runSearch();
 });
