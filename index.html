@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '06/11 11:01';</script>
+<script>window.APP_VERSION = '06/11 11:14';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -1599,6 +1599,26 @@ let setupApplied = null;
   scopeOn = true; setupApplied = cfg;
 })();
 const isStandalone = () => window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+
+/* ---------- Mise à jour automatique de l'appli ----------
+   Au retour dans l'appli, on vérifie si une nouvelle version est en ligne ; si oui, on recharge. */
+let verCheck = 0;
+async function checkAppUpdate() {
+  if (inFrame || !window.APP_VERSION || Date.now() - verCheck < 60000) return;
+  verCheck = Date.now();
+  try {
+    const r = await fetch('./index.html?v=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) return;
+    const m = /APP_VERSION = '([^']+)'/.exec(await r.text());
+    if (!m || m[1] === window.APP_VERSION) return;
+    // pas de rechargement en plein scan ou fiche ouverte : on attend qu'ils soient fermés
+    const busy = () => !$('#cam').hidden || !$('#sheet').hidden;
+    const go = () => { toast('Nouvelle version de l’appli : mise à jour…'); setTimeout(() => location.reload(), 900); };
+    if (!busy()) go(); else { const t = setInterval(() => { if (!busy()) { clearInterval(t); go(); } }, 2000); }
+  } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkAppUpdate(); });
+setInterval(checkAppUpdate, 30 * 60000);
 
 /* ---------- Démarrage ---------- */
 (async () => {
