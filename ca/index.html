@@ -15,7 +15,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script>window.APP_VERSION = '06/11 15:25';</script>
+<script>window.APP_VERSION = '06/11 17:36';</script>
 <style>
 /* Suivi CA : une colonne mobile. Barre du haut (fraîcheur des données), réglages (mesure, période, périmètre),
    chiffre principal, graphique 12 mois N / N-1 / objectif, détail par dépôt, enseigne et magasin. */
@@ -635,8 +635,12 @@ function openSettings() {
     res.innerHTML = '<div class="empty">Recherche…</div>';
     try {
       const tk = await odToken(true); if (!tk) return;
-      const j = await graph(`/me/drive/root/search(q='${encodeURIComponent(q.replace(/'/g, "''"))}')?$top=40`, tk);
-      const files = (j.value || []).filter(f => f.file && /\.xls[xm]?$/i.test(f.name));
+      // 1) dossier Apps/Suivi CA lu directement (un fichier tout neuf n'est pas encore dans la recherche OneDrive)
+      let files = [];
+      try { const d = await graph(`/me/drive/root:/${encodeURIComponent('Apps')}/${encodeURIComponent('Suivi CA')}:/children?$top=50`, tk); files = (d.value || []).filter(f => f.file && /\.xls[xm]?$/i.test(f.name)); } catch (e) {}
+      // 2) recherche OneDrive
+      try { const j = await graph(`/me/drive/root/search(q='${encodeURIComponent(q.replace(/'/g, "''"))}')?$top=40`, tk); for (const f of (j.value || [])) if (f.file && /\.xls[xm]?$/i.test(f.name) && !files.some(x => x.id === f.id)) files.push(f); } catch (e) {}
+      files.sort((x, y) => (/donnees/i.test(y.name) ? 1 : 0) - (/donnees/i.test(x.name) ? 1 : 0));
       res.innerHTML = files.length ? files.map((f, n) => `<button class="item" data-odf="${n}"><span class="t">${esc(f.name)}</span><span class="m">${esc((f.parentReference && f.parentReference.path || '').replace(/^\/drive\/root:?/, '') || 'OneDrive')} · ${fmtDT(Date.parse(f.lastModifiedDateTime))}</span></button>`).join('') : '<div class="empty">Aucun fichier Excel trouvé avec ce nom.</div>';
       res.querySelectorAll('[data-odf]').forEach(el => el.onclick = () => {
         const f = files[+el.dataset.odf];
