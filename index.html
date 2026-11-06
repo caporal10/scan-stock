@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '06/11 15:15';</script>
+<script>window.APP_VERSION = '06/11 18:28';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -143,7 +143,9 @@ dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
 .bl{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .bl-h{padding:10px 14px;background:var(--surface-2);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:2px 12px;align-items:baseline}
 .bl-h .cli{font-weight:600;font-size:16px;flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
-.bl-h .meta{color:var(--muted);font-size:12.5px}
+.bl-h .meta{color:var(--muted);font-size:12.5px;flex-basis:100%}
+.bl-h .meta:empty{display:none}
+.bl-h .ville{color:var(--ink);font-weight:600}
 .bl .item{border-bottom:1px solid var(--line)}
 .bl .item:last-child{border-bottom:0}
 .bl .item{grid-template-columns:minmax(0,1fr) auto}
@@ -1528,7 +1530,7 @@ function renderLiv() {
     const blHTML = [...bls.entries()].sort((a, b) => (slot(a[1]) - slot(b[1])) || (show(a[1][0], 'Nom_Client') || '').localeCompare(show(b[1][0], 'Nom_Client') || '', 'fr')).map(([k, is], n) => {
       const f = is.find(i => isFinite(creneauMin(i))) ?? is[0];
       const cr = slotText(f);
-      return `<div class="bl"><div class="bl-h">${D.creneau ? `<span class="slot${cr ? '' : ' vide'}">${cr ? esc(cr) : 'Créneau ?'}</span>` : ''}<span class="cli">${esc(show(f, 'Nom_Client') || 'Client non renseigné')}</span><span class="meta">${show(f, 'Ville_Client') ? esc(((show(f, 'CP_Client') || '') + ' ' + show(f, 'Ville_Client')).trim()) + ' · ' : ''}${show(f, 'No_BL') ? 'BL <span class="mono">' + esc(show(f, 'No_BL')) + '</span> · ' : ''}${show(f, 'No_cde_client') ? 'Cde <span class="mono">' + esc(show(f, 'No_cde_client')) + '</span> · ' : ''}${esc(show(f, 'Magasin'))}</span></div>
+      return `<div class="bl"><div class="bl-h">${D.creneau ? `<span class="slot${cr ? '' : ' vide'}">${cr ? esc(cr) : 'Créneau ?'}</span>` : ''}<span class="cli">${esc(show(f, 'Nom_Client') || 'Client non renseigné')}</span><span class="meta">${[show(f, 'Ville_Client') ? '<b class="ville">' + esc(((show(f, 'CP_Client') || '') + ' ' + show(f, 'Ville_Client')).trim()) + '</b>' : '', esc(show(f, 'Magasin'))].filter(Boolean).join(' · ')}</span><span class="meta">${[show(f, 'No_BL') ? 'BL <span class="mono">' + esc(show(f, 'No_BL')) + '</span>' : '', show(f, 'No_cde_client') ? 'Cde <span class="mono">' + esc(show(f, 'No_cde_client')) + '</span>' : ''].filter(Boolean).join(' · ')}</span></div>
         ${is.map(i => `<button class="item" data-fiche="${i}"><span class="t">${esc(show(i, 'Modele') || show(i, 'Article'))}</span><span class="m"><span class="mono">${esc(show(i, 'No_Stock'))}</span>${show(i, 'Article') && show(i, 'Modele') ? ' · ' + esc(show(i, 'Article')) : ''}</span><span class="r">${show(i, 'Etat_Stock') !== 'Livraison en cours' ? etatPill(i) : ''}<span class="loc${show(i, 'Localite') ? '' : ' vide'}">${esc(show(i, 'Localite') || 'Sans localité')}</span></span></button>`).join('')}</div>`;
     }).join('');
     const tot = montantHT(tours.get(t));
