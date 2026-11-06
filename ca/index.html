@@ -15,7 +15,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script>window.APP_VERSION = '06/11 13:46';</script>
+<script>window.APP_VERSION = '06/11 14:06';</script>
 <style>
 /* Suivi CA : une colonne mobile. Barre du haut (fraîcheur des données), réglages (mesure, période, périmètre),
    chiffre principal, graphique 12 mois N / N-1 / objectif, détail par dépôt, enseigne et magasin. */
@@ -484,7 +484,7 @@ function bind() {
 function renderWelcome() {
   $('#main').innerHTML = `<section class="panel"><h2>Suivi CA</h2>
     <p class="lead">Vos chiffres de facturation et de prise de commande, par magasin, dépôt et enseigne, comparés à l'année précédente et à vos objectifs.</p>
-    ${odAvailable() ? `<p>Connectez votre compte Microsoft professionnel, puis choisissez le fichier <b>Suivi CA live.xlsx</b> (OneDrive, dossier Apps\\Suivi CA).</p>
+    ${odAvailable() ? `<p>Connectez votre compte Microsoft professionnel, puis choisissez le fichier <b>Suivi CA - donnees.xlsx</b> (OneDrive, dossier Apps\\Suivi CA).</p>
     <button class="btn primary" id="w-set">Se connecter et choisir le fichier</button>` : ''}
     <button class="btn" id="w-file">Ouvrir un fichier depuis cet appareil</button>
     <p class="hint">Lecture seule : l'appli télécharge une copie du fichier, elle ne le modifie jamais.</p></section>
@@ -578,7 +578,7 @@ function openSettings() {
       ${od.lastCheck ? `<dt>Dernière vérification</dt><dd>${fmtDT(od.lastCheck)}</dd>` : ''}</dl>
     ${od.link ? '<div class="row"><button class="btn primary" id="od-now">Actualiser maintenant</button><button class="btn" id="od-change">Changer de fichier</button></div>' : ''}
     <div id="od-pick" ${od.link ? 'hidden' : ''}>
-      <form class="field" id="od-search"><input id="od-q" value="Suivi CA live" aria-label="Nom du fichier"><button class="btn" type="submit">Chercher</button></form>
+      <form class="field" id="od-search"><input id="od-q" value="Suivi CA - donnees" aria-label="Nom du fichier"><button class="btn" type="submit">Chercher</button></form>
       <div class="list" id="od-res" style="margin-top:8px"><div class="empty">Cherchez le fichier par une partie de son nom.</div></div>
     </div>
     <button class="btn danger" id="od-logout" style="align-self:flex-start">Déconnecter OneDrive</button>`;
