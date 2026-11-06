@@ -15,7 +15,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script>window.APP_VERSION = '06/11 17:52';</script>
+<script>window.APP_VERSION = '06/11 17:53';</script>
 <style>
 /* Suivi CA : une colonne mobile. Barre du haut (fraîcheur des données), réglages (mesure, période, périmètre),
    chiffre principal, graphique 12 mois N / N-1 / objectif, détail par dépôt, enseigne et magasin. */
@@ -65,7 +65,7 @@ p{margin:0}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.iconbtn.busy svg{animation:none}}
 
-main{padding:14px max(16px,env(safe-area-inset-right,0px)) 40px max(16px,env(safe-area-inset-left,0px));max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+main{padding:14px max(16px,env(safe-area-inset-right,0px)) calc(84px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
 h2{font-family:var(--f-display);font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;margin:0;line-height:1.05}
 h3{font-family:var(--f-display);font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
@@ -151,6 +151,13 @@ th{font-weight:600;color:var(--muted);font-size:12px}
 .sheet-head{display:flex;justify-content:space-between;align-items:center}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:50;background:var(--ink);color:var(--surface);padding:10px 14px;border-radius:10px;font-size:14px;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.2)}
 .ver{text-align:center;font-size:11px;color:var(--muted)}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);
+  display:grid;grid-template-columns:repeat(2,1fr);
+  padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px));padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabs button{border:0;background:none;padding:8px 4px 10px;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:11.5px;font-weight:600;letter-spacing:.03em;position:relative}
+.tabs button svg{width:24px;height:24px}
+.tabs button[aria-current="page"]{color:var(--accent)}
+.tabs button[aria-current="page"]::before{content:"";position:absolute;top:0;left:25%;right:25%;height:3px;border-radius:0 0 3px 3px;background:var(--accent)}
 </style>
 </head>
 <body>
@@ -161,6 +168,10 @@ th{font-weight:600;color:var(--muted);font-size:12px}
   <button class="iconbtn" id="btn-set" aria-label="Réglages"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
 </header>
 <main id="main"></main>
+<nav class="tabs" id="tabs" aria-label="Sections" hidden>
+  <button data-tab="FACT" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h7M9 8h3"/></svg>Facturé</button>
+  <button data-tab="CA" aria-current="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 11h10.2L20 7H6.2"/><circle cx="9" cy="19.5" r="1.5"/><circle cx="17" cy="19.5" r="1.5"/></svg>Commande</button>
+</nav>
 <div id="sheet" class="sheet" hidden><div class="sheet-in" id="sheet-in"></div></div>
 <div id="toast" class="toast" hidden></div>
 <input type="file" id="file" accept=".xlsx,.xlsm" hidden>
@@ -322,6 +333,8 @@ function render() {
   const main = $('#main');
   if (!M) { renderWelcome(); return; }
   if (!scopeValid(S.scope) || (S.t === 'CA' && S.scope.startsWith('dep:'))) S.scope = 'pole'; // pas de dépôts en prise de commande
+  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.tab === S.t ? 'page' : 'false'));
+  $('#tabs').hidden = false;
   const isF = S.t === 'FACT', st = stats(scopeMags(S.scope));
   const yrs = []; for (let y = C.ty; y >= 2012; y--) yrs.push(y);
   const perLabel = S.mode === 'mois' ? MOIS[S.m - 1] + ' ' + S.y : S.mode === 'trim' ? 'T' + S.q + ' ' + S.y : 'Année ' + S.y;
@@ -376,7 +389,6 @@ function render() {
 
   main.innerHTML = `
   <section class="controls" aria-label="Réglages de l'affichage">
-    <div class="seg" id="seg-t"><button data-t="FACT" aria-pressed="${isF}">Facturé HT</button><button data-t="CA" aria-pressed="${!isF}">Prise de commande TTC</button></div>
     <div class="ctlrow">
       <div class="seg" id="seg-mode"><button data-mode="mois" aria-pressed="${S.mode === 'mois'}">Mois</button><button data-mode="trim" aria-pressed="${S.mode === 'trim'}">Trimestre</button><button data-mode="annee" aria-pressed="${S.mode === 'annee'}">Année</button></div>
       <select class="yr" id="yr" aria-label="Année">${yrs.map(y => `<option ${y === S.y ? 'selected' : ''}>${y}</option>`).join('')}</select>
@@ -430,7 +442,7 @@ function rowsFor() {
   // Lignes du détail selon le périmètre choisi
   const out = [];
   if (S.scope === 'pole') {
-    if (S.t === 'FACT') out.push({ h: 'Par dépôt' }), M.depots.forEach(d => out.push({ sc: 'dep:' + d.name, name: d.name, mags: d.mags, sub: d.mags.length + ' magasin' + (d.mags.length > 1 ? 's' : '') }));
+    if (S.t === 'FACT') { out.push({ h: 'Par dépôt' }); M.depots.forEach(d => out.push({ sc: 'dep:' + d.name, name: d.name, mags: d.mags, sub: d.mags.length + ' magasin' + (d.mags.length > 1 ? 's' : '') })); }
     out.push({ h: 'Par enseigne' }); M.ens.forEach(e => out.push({ sc: 'ens:' + e, name: e, mags: M.mags.filter(g => M.ensOf(g) === e) }));
     out.push({ h: 'Par magasin' }); M.mags.forEach(g => out.push({ sc: 'mag:' + g, name: g, mags: [g] }));
   } else if (S.scope.startsWith('mag:')) {
@@ -509,7 +521,6 @@ function drawChart(st) {
 }
 function niceStep(x) { const p = Math.pow(10, Math.floor(Math.log10(x))), f = x / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p; }
 function bind() {
-  document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { S.t = b.dataset.t; saveUI(); render(); });
   document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { S.mode = b.dataset.mode; saveUI(); render(); });
   document.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { S.m = +b.dataset.m; render(); });
   document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { S.q = +b.dataset.q; render(); });
@@ -605,6 +616,7 @@ async function odRefresh({ force = false, interactive = false, quiet = false } =
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && od.link && Date.now() - od.lastCheck > 2 * 60000) odRefresh({ quiet: true }); });
 $('#btn-refresh').onclick = () => odRefresh({ interactive: true });
 $('#btn-set').onclick = openSettings;
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => { S.t = b.dataset.tab; saveUI(); render(); window.scrollTo(0, 0); });
 function closeSheet() { $('#sheet').hidden = true; }
 $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
 function openSettings() {
