@@ -15,7 +15,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script>window.APP_VERSION = '06/11 14:29';</script>
+<script>window.APP_VERSION = '06/11 15:25';</script>
 <style>
 /* Suivi CA : une colonne mobile. Barre du haut (fraîcheur des données), réglages (mesure, période, périmètre),
    chiffre principal, graphique 12 mois N / N-1 / objectif, détail par dépôt, enseigne et magasin. */
@@ -195,13 +195,14 @@ function parseModel(wb) {
   const rows = n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: null, blankrows: true });
   const num = v => typeof v === 'number' ? v : (v == null || v === '' ? 0 : (+String(v).replace(',', '.') || 0));
   const str = v => v == null ? '' : String(v).trim();
-  const live = {}, hist = {}, anc = {}, jourAvail = {};
+  const live = {}, hist = {}, anc = {}, jourAvail = {}; let jours = false;
   const d = rows('Données');
   for (let i = 1; i < d.length; i++) {
     const r = d[i]; if (!r || !r[0]) continue;
     const k = str(r[0]) + '|' + str(r[1]) + '|' + num(r[2]) + '|' + num(r[3]);
     const o = live[k] || (live[k] = { n: 0, ht: 0, ttc: 0 });
     o.n++; o.ht += num(r[4]); o.ttc += num(r[5]);
+    if (str(r[0]) === 'CA_J') jours = true;
     if (/_JOUR$/.test(str(r[0]))) jourAvail[str(r[0]).replace('_JOUR', '') + '|' + num(r[2]) + '|' + num(r[3])] = true;
   }
   const stamp = excelDate(d[1] && d[1][8]);
@@ -232,7 +233,7 @@ function parseModel(wb) {
   if (!depots.length) throw new Error('onglet Dépôts illisible');
   const mags = depots.flatMap(x => x.mags);
   const ensOf = m => ens.find(e => m.startsWith(e)) || '';
-  return { live, hist, anc, obj, clo, depots, ens, mags, ensOf, stamp, jourAvail };
+  return { live, hist, anc, obj, clo, depots, ens, mags, ensOf, stamp, jourAvail, jours };
 }
 function makeCalc(M, today) {
   today = today || new Date();
@@ -389,6 +390,7 @@ function render() {
     ${heroNote ? `<p class="note">${heroNote}</p>` : ''}
     ${objHTML}
   </section>
+  ${dayPanelHTML(scopeMags(S.scope))}
   <section class="panel">
     <div class="sectitle"><h3>Mois par mois</h3></div>
     <div class="legend"><span><i style="background:var(--s-n)"></i>${S.y}</span><span><i style="background:var(--s-n1)"></i>${S.y - 1}</span>${isF ? '<span><i class="tick" style="background:var(--s-obj)"></i>Objectif</span>' : ''}</div>
@@ -400,6 +402,27 @@ function render() {
   <p class="ver">Version ${esc(window.APP_VERSION)} · lecture seule</p>`;
   drawChart(st);
   bind();
+}
+// Prise de commande des 7 derniers jours (lignes CA_J), sans comparaison
+function dayPanelHTML(mags) {
+  if (S.t !== 'CA' || !M.jours || S.y !== C.ty) return '';
+  const ref = M.stamp ? new Date(M.stamp) : new Date();
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - i);
+    const key = d.getFullYear() + '|' + ((d.getMonth() + 1) * 100 + d.getDate());
+    let ttc = 0, ht = 0; for (const g of mags) { const l = M.live['CA_J|' + g + '|' + key]; if (l) { ttc += l.ttc; ht += l.ht; } }
+    days.push({ d, ttc, ht });
+  }
+  const wd = d => d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const t = days[0], isToday = new Date().toDateString() === ref.toDateString();
+  return `<section class="panel hero">
+    <h3>${esc(scopeName(S.scope))} · Commandé du jour</h3>
+    <div class="lbl">${isToday ? 'Aujourd\u2019hui, ' : ''}${esc(wd(t.d))} · données de ${ref.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
+    <div class="big">${eur(t.ttc)}</div>
+    <p class="note">TTC · ${eur(t.ht)} HT. Pas de comparaison avec l\u2019an dernier : le même jour ne tombe pas le même jour de la semaine.</p>
+    <div class="list">${days.slice(1).map(x => `<div class="item"><span class="t" style="font-weight:500">${esc(wd(x.d).replace(/^./, c => c.toUpperCase()))}</span><span class="v">${eur(x.ttc)}</span></div>`).join('')}</div>
+  </section>`;
 }
 function rowsFor() {
   // Lignes du détail selon le périmètre choisi
