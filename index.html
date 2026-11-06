@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '06/11 10:35';</script>
+<script>window.APP_VERSION = '06/11 11:01';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -534,7 +534,7 @@ function show(i, name) {
   const v = V(i, name); if (isEmpty(v)) return '';
   if (isTimeCol(name) && typeof v === 'number') { const m = timeMin(v); if (m != null) return String(Math.floor(m / 60)).padStart(2, '0') + 'h' + String(m % 60).padStart(2, '0'); }
   if (D.dateCols.has(D.col[name])) return fmtDate(v);
-  if (name === 'Prix_revient') return fmtEUR(v);
+  if (name === 'Prix_revient' || name === 'Prix_vente_HT') return fmtEUR(v);
   return String(v).trim();
 }
 function dims(i) {
@@ -779,7 +779,7 @@ const ETAT_VAR = { ok: 'var(--ok)', info: 'var(--info)', warn: 'var(--warn)', ba
 const GROUPS = [
   ['Article', [['Enseigne'],['Magasin'],['Fournisseur'],['Ref_Fourn','Réf. fournisseur'],['Categorie','Catégorie'],['Couleur'],['Complement_Stock','Complément'],['@dims','Dimensions'],['Famille'],['Sous_famille','Sous-famille'],['Socite','Société']]],
   ['Stock', [['Type_Stock','Type de stock'],['Nature_stock','Nature'],['Localite','Localité'],['date_entree_initiale','Entrée initiale'],['Date_Dernier_Mouvement','Dernier mouvement'],['Scan_date','Dernier scan'],['Prix_revient','Prix de revient']]],
-  ['Commande client', [['Nom_Client','Client'],['No_cde_client','N° commande'],['Date_Cde_Clientr','Date commande'],['BP_Cde_Client','BP'],['No_BL','N° BL'],['Date_BL','Date BL'],['Tournee','Tournée']]],
+  ['Commande client', [['Nom_Client','Client'],['Ville_Client','Ville'],['No_cde_client','N° commande'],['Date_Cde_Clientr','Date commande'],['Vendeur','Vendeur'],['Type_vente','Type de vente'],['Prix_vente_HT','Prix de vente HT'],['BP_Cde_Client','BP'],['No_BL','N° BL'],['Date_BL','Date BL'],['Tournee','Tournée']]],
   ['Commande fournisseur', [['No_cde_fourn','N° commande'],['Date_cde_fourn','Date'],['date_confirmation','Confirmation'],['Magasin_cde_fourn','Magasin'],['Intitule_cde_fourn','Intitulé']]],
   ['Transfert', [['No_transfert','N° transfert'],['Date_transfert','Date'],['Titre_transfert1','Titre'],['Titre_transfert2','Suite']]]
 ];
@@ -791,9 +791,10 @@ const FIELD_LABELS = {
   Scan_date:'Dernier scan', Prix_revient:'Prix de revient',
   Nom_Client:'Client', No_cde_client:'N° cde client', Date_Cde_Clientr:'Date cde client', BP_Cde_Client:'BP client', No_BL:'N° BL', Date_BL:'Date BL', Tournee:'Tournée',
   No_cde_fourn:'N° cde fournisseur', Date_cde_fourn:'Date cde fournisseur', date_confirmation:'Confirmation fournisseur', Magasin_cde_fourn:'Magasin cde fournisseur', Intitule_cde_fourn:'Intitulé cde fournisseur',
-  No_transfert:'N° transfert', Date_transfert:'Date transfert', Titre_transfert1:'Titre transfert', Titre_transfert2:'Titre transfert (suite)'
+  No_transfert:'N° transfert', Date_transfert:'Date transfert', Titre_transfert1:'Titre transfert', Titre_transfert2:'Titre transfert (suite)',
+  Prix_vente_HT:'Prix de vente HT', Vendeur:'Vendeur', Type_vente:'Type de vente', CP_Client:'Code postal client', Ville_Client:'Ville client', heure_debut:'Créneau début', heure_fin:'Créneau fin'
 };
-const KNOWN_COLS = new Set(['Enseigne','Socite','Magasin','Fournisseur','Modele','Article','Ref_Fourn','Categorie','Couleur','Dim_1','Dim_2','Dim_3','No_Stock','Etat_Stock','Type_Stock','date_entree_initiale','Date_Dernier_Mouvement','Prix_revient','Nature_stock','Complement_Stock','Localite','Scan_date','Famille','Sous_famille','No_cde_client','Date_Cde_Clientr','Nom_Client','BP_Cde_Client','No_BL','Date_BL','Tournee','Magasin_cde_fourn','No_cde_fourn','Date_cde_fourn','date_confirmation','Intitule_cde_fourn','No_transfert','Date_transfert','Titre_transfert1','Titre_transfert2']);
+const KNOWN_COLS = new Set(['Enseigne','Socite','Magasin','Fournisseur','Modele','Article','Ref_Fourn','Categorie','Couleur','Dim_1','Dim_2','Dim_3','No_Stock','Etat_Stock','Type_Stock','date_entree_initiale','Date_Dernier_Mouvement','Prix_revient','Nature_stock','Complement_Stock','Localite','Scan_date','Famille','Sous_famille','No_cde_client','Date_Cde_Clientr','Nom_Client','BP_Cde_Client','No_BL','Date_BL','Tournee','Magasin_cde_fourn','No_cde_fourn','Date_cde_fourn','date_confirmation','Intitule_cde_fourn','No_transfert','Date_transfert','Titre_transfert1','Titre_transfert2','Prix_vente_HT','Vendeur','Type_vente','CP_Client','Ville_Client','heure_debut','heure_fin']);
 const DEFAULT_FIELDS = ['Article', 'Couleur', 'Magasin', '@dims', 'Fournisseur', 'Nom_Client', 'No_cde_client'];
 const fieldVal = (i, k) => k === '@dims' ? dims(i) : show(i, k);
 const monoKey = k => /No_|Ref_|BP_/.test(k);
@@ -1527,7 +1528,7 @@ function renderLiv() {
     const blHTML = [...bls.entries()].sort((a, b) => (slot(a[1]) - slot(b[1])) || (show(a[1][0], 'Nom_Client') || '').localeCompare(show(b[1][0], 'Nom_Client') || '', 'fr')).map(([k, is], n) => {
       const f = is.find(i => isFinite(creneauMin(i))) ?? is[0];
       const cr = slotText(f);
-      return `<div class="bl"><div class="bl-h">${D.creneau ? `<span class="slot${cr ? '' : ' vide'}">${cr ? esc(cr) : 'Créneau ?'}</span>` : ''}<span class="cli">${esc(show(f, 'Nom_Client') || 'Client non renseigné')}</span><span class="meta">${show(f, 'No_BL') ? 'BL <span class="mono">' + esc(show(f, 'No_BL')) + '</span> · ' : ''}${show(f, 'No_cde_client') ? 'Cde <span class="mono">' + esc(show(f, 'No_cde_client')) + '</span> · ' : ''}${esc(show(f, 'Magasin'))}</span></div>
+      return `<div class="bl"><div class="bl-h">${D.creneau ? `<span class="slot${cr ? '' : ' vide'}">${cr ? esc(cr) : 'Créneau ?'}</span>` : ''}<span class="cli">${esc(show(f, 'Nom_Client') || 'Client non renseigné')}</span><span class="meta">${show(f, 'Ville_Client') ? esc(show(f, 'Ville_Client')) + ' · ' : ''}${show(f, 'No_BL') ? 'BL <span class="mono">' + esc(show(f, 'No_BL')) + '</span> · ' : ''}${show(f, 'No_cde_client') ? 'Cde <span class="mono">' + esc(show(f, 'No_cde_client')) + '</span> · ' : ''}${esc(show(f, 'Magasin'))}</span></div>
         ${is.map(i => `<button class="item" data-fiche="${i}"><span class="t">${esc(show(i, 'Modele') || show(i, 'Article'))}</span><span class="m"><span class="mono">${esc(show(i, 'No_Stock'))}</span>${show(i, 'Article') && show(i, 'Modele') ? ' · ' + esc(show(i, 'Article')) : ''}</span><span class="r">${show(i, 'Etat_Stock') !== 'Livraison en cours' ? etatPill(i) : ''}<span class="loc${show(i, 'Localite') ? '' : ' vide'}">${esc(show(i, 'Localite') || 'Sans localité')}</span></span></button>`).join('')}</div>`;
     }).join('');
     const tot = montantHT(tours.get(t));
