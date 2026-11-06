@@ -15,7 +15,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script>window.APP_VERSION = '06/11 17:36';</script>
+<script>window.APP_VERSION = '06/11 17:52';</script>
 <style>
 /* Suivi CA : une colonne mobile. Barre du haut (fraîcheur des données), réglages (mesure, période, périmètre),
    chiffre principal, graphique 12 mois N / N-1 / objectif, détail par dépôt, enseigne et magasin. */
@@ -321,14 +321,16 @@ const evPill = ev => ev == null ? '<span class="pill flat">–</span>' : `<span 
 function render() {
   const main = $('#main');
   if (!M) { renderWelcome(); return; }
-  if (!scopeValid(S.scope)) S.scope = 'pole';
+  if (!scopeValid(S.scope) || (S.t === 'CA' && S.scope.startsWith('dep:'))) S.scope = 'pole'; // pas de dépôts en prise de commande
   const isF = S.t === 'FACT', st = stats(scopeMags(S.scope));
   const yrs = []; for (let y = C.ty; y >= 2012; y--) yrs.push(y);
   const perLabel = S.mode === 'mois' ? MOIS[S.m - 1] + ' ' + S.y : S.mode === 'trim' ? 'T' + S.q + ' ' + S.y : 'Année ' + S.y;
   const chips = [];
   chips.push(`<button class="chip" data-sc="pole" aria-pressed="${S.scope === 'pole'}">Total pôle</button>`);
-  M.depots.forEach(d => chips.push(`<button class="chip" data-sc="dep:${esc(d.name)}" aria-pressed="${S.scope === 'dep:' + d.name}">${esc(d.name)}</button>`));
-  chips.push('<span class="chip sep">|</span>');
+  if (S.t === 'FACT') {
+    M.depots.forEach(d => chips.push(`<button class="chip" data-sc="dep:${esc(d.name)}" aria-pressed="${S.scope === 'dep:' + d.name}">${esc(d.name)}</button>`));
+    chips.push('<span class="chip sep">|</span>');
+  }
   M.ens.forEach(e => chips.push(`<button class="chip" data-sc="ens:${esc(e)}" aria-pressed="${S.scope === 'ens:' + e}">${esc(e)}</button>`));
   chips.push('<span class="chip sep">|</span>');
   M.mags.forEach(g => chips.push(`<button class="chip" data-sc="mag:${esc(g)}" aria-pressed="${S.scope === 'mag:' + g}">${esc(g)}</button>`));
@@ -428,13 +430,13 @@ function rowsFor() {
   // Lignes du détail selon le périmètre choisi
   const out = [];
   if (S.scope === 'pole') {
-    out.push({ h: 'Par dépôt' }); M.depots.forEach(d => out.push({ sc: 'dep:' + d.name, name: d.name, mags: d.mags, sub: d.mags.length + ' magasin' + (d.mags.length > 1 ? 's' : '') }));
+    if (S.t === 'FACT') out.push({ h: 'Par dépôt' }), M.depots.forEach(d => out.push({ sc: 'dep:' + d.name, name: d.name, mags: d.mags, sub: d.mags.length + ' magasin' + (d.mags.length > 1 ? 's' : '') }));
     out.push({ h: 'Par enseigne' }); M.ens.forEach(e => out.push({ sc: 'ens:' + e, name: e, mags: M.mags.filter(g => M.ensOf(g) === e) }));
     out.push({ h: 'Par magasin' }); M.mags.forEach(g => out.push({ sc: 'mag:' + g, name: g, mags: [g] }));
   } else if (S.scope.startsWith('mag:')) {
     const g = S.scope.slice(4), d = M.depots.find(x => x.mags.includes(g));
     out.push({ h: 'Comparer avec' });
-    if (d) out.push({ sc: 'dep:' + d.name, name: d.name, mags: d.mags });
+    if (d && S.t === 'FACT') out.push({ sc: 'dep:' + d.name, name: d.name, mags: d.mags });
     out.push({ sc: 'ens:' + M.ensOf(g), name: M.ensOf(g), mags: M.mags.filter(x => M.ensOf(x) === M.ensOf(g)) });
     out.push({ sc: 'pole', name: 'Total pôle', mags: M.mags });
   } else {
