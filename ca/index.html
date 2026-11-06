@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0f5e57">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Suivi CA">
+<title>Suivi CA</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script>window.APP_VERSION = '06/11 13:46';</script>
+<style>
+/* Suivi CA : une colonne mobile. Barre du haut (fraîcheur des données), réglages (mesure, période, périmètre),
+   chiffre principal, graphique 12 mois N / N-1 / objectif, détail par dépôt, enseigne et magasin. */
+:root{
+  --bg:#eef1ee; --surface:#ffffff; --surface-2:#f6f8f6; --ink:#16201c; --muted:#5d6a64; --line:#d6dcd7;
+  --accent:#0f5e57; --accent-ink:#ffffff; --signal:#e3a21a;
+  --ok:#1d7a46; --ok-bg:#e3f3e8; --bad:#b42318; --bad-bg:#fbe5e2;
+  --s-n:#0f5e57; --s-n1:#9aa6a0; --s-obj:#16201c; --grid:#e3e8e4;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1513; --surface:#17201d; --surface-2:#1d2724; --ink:#e6ebe8; --muted:#97a49e; --line:#2b3632;
+  --accent:#4db0a5; --accent-ink:#06201d; --signal:#f0b43c;
+  --ok:#5fd08e; --ok-bg:#163525; --bad:#ff8a7d; --bad-bg:#3d1a17;
+  --s-n:#4db0a5; --s-n1:#5e6b66; --s-obj:#e6ebe8; --grid:#25302c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1513; --surface:#17201d; --surface-2:#1d2724; --ink:#e6ebe8; --muted:#97a49e; --line:#2b3632;
+  --accent:#4db0a5; --accent-ink:#06201d; --signal:#f0b43c;
+  --ok:#5fd08e; --ok-bg:#163525; --bad:#ff8a7d; --bad-bg:#3d1a17;
+  --s-n:#4db0a5; --s-n1:#5e6b66; --s-obj:#e6ebe8; --grid:#25302c; color-scheme:dark}
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html,body{min-height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;margin:0;-webkit-tap-highlight-color:transparent;
+  padding-bottom:env(safe-area-inset-bottom,0px)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+p{margin:0}
+
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line);
+  padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));display:flex;align-items:center;gap:8px}
+.brand{font-family:var(--f-display);font-weight:700;font-size:21px;letter-spacing:.02em;text-transform:uppercase;line-height:1;white-space:nowrap}
+.brand small{display:block;font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--muted);margin-top:3px}
+.datastat{flex:1;min-width:0;display:flex;align-items:center;gap:8px;justify-content:flex-end;font-size:12px;color:var(--muted)}
+.datastat .txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.dot.on{background:var(--ok)} .dot.warn{background:var(--signal)}
+.iconbtn{flex:none;width:38px;height:38px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);display:grid;place-items:center}
+.iconbtn svg{width:20px;height:20px}
+.iconbtn.busy svg{animation:sp .9s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.iconbtn.busy svg{animation:none}}
+
+main{padding:14px max(16px,env(safe-area-inset-right,0px)) 40px max(16px,env(safe-area-inset-left,0px));max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+h2{font-family:var(--f-display);font-weight:700;font-size:26px;text-transform:uppercase;letter-spacing:.02em;margin:0;line-height:1.05}
+h3{font-family:var(--f-display);font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.lead{color:var(--muted)}
+.hint{font-size:12.5px;color:var(--muted)}
+.btn{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:11px 14px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{color:var(--bad)}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row>.btn{flex:1 1 140px}
+.field{display:flex;gap:8px}
+.field input{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:11px 12px;min-height:46px}
+dl{display:grid;grid-template-columns:minmax(110px,38%) 1fr;gap:6px 14px;margin:0}
+dt{color:var(--muted);font-size:13px} dd{margin:0;font-weight:500;min-width:0;overflow-wrap:anywhere}
+
+/* Réglages */
+.controls{display:flex;flex-direction:column;gap:8px}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface-2)}
+.seg button{flex:1;border:0;background:none;padding:9px 6px;font-weight:600;font-size:14px;border-right:1px solid var(--line);white-space:nowrap}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.ctlrow{display:flex;gap:8px;align-items:stretch}
+.ctlrow .seg{flex:1}
+select.yr{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:0 10px;font-weight:600;min-height:40px}
+.scroller{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px}
+.scroller::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 13px;font-size:13.5px;font-weight:500;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.chip.sep{border:0;background:none;padding:7px 2px;color:var(--line)}
+
+/* Chiffre principal */
+.hero{gap:6px}
+.hero .lbl{font-size:13px;color:var(--muted)}
+.hero .big{font-family:var(--f-display);font-weight:700;font-size:46px;line-height:1;letter-spacing:.01em;font-variant-numeric:tabular-nums}
+.cmp{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;font-size:14px;color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 9px;font-weight:600;font-size:13.5px;font-variant-numeric:tabular-nums}
+.pill.up{background:var(--ok-bg);color:var(--ok)} .pill.down{background:var(--bad-bg);color:var(--bad)} .pill.flat{background:var(--surface-2);color:var(--muted)}
+.note{font-size:12.5px;color:var(--muted)}
+.obj{border-top:1px solid var(--line);padding-top:12px;margin-top:6px;display:flex;flex-direction:column;gap:8px}
+.objline{display:flex;justify-content:space-between;gap:10px;font-size:14px}
+.objline b{font-variant-numeric:tabular-nums}
+.bar{height:8px;border-radius:4px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--s-n);border-radius:4px}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.kpi{background:var(--surface-2);border-radius:8px;padding:10px 12px}
+.kpi span{display:block;font-size:12px;color:var(--muted)}
+.kpi b{font-size:17px;font-variant-numeric:tabular-nums}
+
+/* Graphique */
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.legend i.tick{height:2px;width:12px;border-radius:0;vertical-align:3px}
+.chart{position:relative}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart .tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--surface);border-radius:8px;padding:8px 10px;font-size:12.5px;line-height:1.35;min-width:150px;box-shadow:0 4px 14px rgba(0,0,0,.18);transform:translate(-50%,-100%);white-space:nowrap}
+.chart .tip b{font-family:var(--f-display);font-size:14px;letter-spacing:.04em;text-transform:uppercase}
+.chart .tip .r{display:flex;justify-content:space-between;gap:12px;font-variant-numeric:tabular-nums}
+
+/* Listes */
+.list{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.item{display:grid;grid-template-columns:1fr auto;gap:3px 10px;padding:11px 14px;border:0;border-bottom:1px solid var(--line);text-align:left;background:none;width:100%;align-items:center}
+.item:last-child{border-bottom:0}
+.item .t{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .v{font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+.item .m{color:var(--muted);font-size:12.5px;display:flex;gap:8px;align-items:center;min-width:0}
+.item .m .bar{flex:1;max-width:120px;height:6px}
+.item .e{text-align:right}
+.item.tot{background:var(--surface-2)}
+.empty{padding:18px 14px;color:var(--muted);font-size:13.5px}
+.sectitle{display:flex;justify-content:space-between;align-items:baseline;margin-top:4px}
+details.tbl{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+details.tbl summary{padding:12px 14px;font-weight:600;cursor:pointer}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:7px 10px;text-align:right;border-top:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font-weight:600;color:var(--muted);font-size:12px}
+.tblwrap{overflow-x:auto}
+
+/* Feuille (réglages OneDrive) */
+.sheet{position:fixed;inset:0;z-index:40;background:rgba(10,16,14,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet-in{background:var(--bg);width:100%;max-width:760px;max-height:88vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px max(16px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px}
+.sheet-in>*{flex-shrink:0}
+.sheet-head{display:flex;justify-content:space-between;align-items:center}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:50;background:var(--ink);color:var(--surface);padding:10px 14px;border-radius:10px;font-size:14px;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.2)}
+.ver{text-align:center;font-size:11px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">Suivi CA<small>Lecture seule</small></div>
+  <div class="datastat"><span class="dot" id="st-dot"></span><span class="txt" id="st-txt">Aucune donnée</span></div>
+  <button class="iconbtn" id="btn-refresh" aria-label="Actualiser depuis OneDrive" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>
+  <button class="iconbtn" id="btn-set" aria-label="Réglages"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+</header>
+<main id="main"></main>
+<div id="sheet" class="sheet" hidden><div class="sheet-in" id="sheet-in"></div></div>
+<div id="toast" class="toast" hidden></div>
+<input type="file" id="file" accept=".xlsx,.xlsm" hidden>
+
+<script src="../vendor/xlsx.full.min.js"></script>
+<script src="../vendor/msal-browser.min.js"></script>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('ca.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('ca.' + k, JSON.stringify(v)); } catch (e) {} },
+  del(k) { try { localStorage.removeItem('ca.' + k); } catch (e) {} }
+};
+let toastT; function toast(m) { const t = $('#toast'); t.textContent = m; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 3800); }
+const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+const MC = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+const fmtDT = t => { const d = new Date(t); return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); };
+const eur = v => v == null ? '–' : Math.round(v).toLocaleString('fr-FR') + ' €';
+const keur = v => { if (v == null) return '–'; const a = Math.abs(v); if (a >= 1e6) return (v / 1e6).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' M€'; if (a >= 1e3) return Math.round(v / 1e3).toLocaleString('fr-FR') + ' k€'; return Math.round(v) + ' €'; };
+const pct = v => v == null || !isFinite(v) ? '–' : (v > 0 ? '+' : '') + (v * 100).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' %';
+const pct0 = v => v == null || !isFinite(v) ? '–' : Math.round(v * 100) + ' %';
+
+/*CALC*/
+// ---------- Lecture du classeur « Suivi CA live.xlsx » et calculs (mêmes règles que les onglets Excel) ----------
+// Valeur d'un mois : s'il existe une donnée live, live + ancienne base ; sinon votre saisie (Historique).
+function excelDate(v) { if (typeof v === 'number') return Math.round((v - 25569) * 86400000 + new Date().getTimezoneOffset() * 60000); if (v instanceof Date) return v.getTime(); return null; }
+function parseModel(wb) {
+  const need = ['Données', 'Historique', 'Ancienne base', 'Objectifs', 'Dépôts'];
+  for (const n of need) if (!wb.Sheets[n]) throw new Error('onglet « ' + n + ' » absent : ce n’est pas le fichier Suivi CA live');
+  const rows = n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: null, blankrows: true });
+  const num = v => typeof v === 'number' ? v : (v == null || v === '' ? 0 : (+String(v).replace(',', '.') || 0));
+  const str = v => v == null ? '' : String(v).trim();
+  const live = {}, hist = {}, anc = {};
+  const d = rows('Données');
+  for (let i = 1; i < d.length; i++) {
+    const r = d[i]; if (!r || !r[0]) continue;
+    const k = str(r[0]) + '|' + str(r[1]) + '|' + num(r[2]) + '|' + num(r[3]);
+    const o = live[k] || (live[k] = { n: 0, ht: 0, ttc: 0 });
+    o.n++; o.ht += num(r[4]); o.ttc += num(r[5]);
+  }
+  const stamp = excelDate(d[1] && d[1][8]);
+  const h = rows('Historique');
+  for (let i = 2; i < h.length; i++) { const r = h[i]; if (!r || !r[0]) continue; const k = str(r[0]) + '|' + str(r[1]) + '|' + num(r[2]) + '|' + num(r[3]); hist[k] = (hist[k] || 0) + num(r[4]); }
+  const a = rows('Ancienne base');
+  for (let i = 5; i < a.length; i++) { const r = a[i]; if (!r || !r[0]) continue; const k = str(r[0]) + '|' + str(r[1]) + '|' + num(r[2]) + '|' + num(r[3]); anc[k] = (anc[k] || 0) + num(r[4]); }
+  const o = rows('Objectifs'), obj = {}, clo = {};
+  for (let i = 4; i < Math.min(o.length, 200); i++) {
+    const r = o[i]; if (!r) continue;
+    if (r[0] && r[1]) { const k = num(r[0]) + '|' + str(r[1]); const arr = obj[k] || (obj[k] = Array(13).fill(0)); for (let m = 1; m <= 12; m++) arr[m] += num(r[1 + m]); }
+    if (i < 40 && r[16]) { clo[num(r[16])] = [null]; for (let m = 1; m <= 12; m++) clo[num(r[16])][m] = str(r[16 + m]) === 'Oui'; }
+  }
+  // Organisation : lue dans l'onglet « Dépôts » (dépôts, magasins, enseignes)
+  const dp = rows('Dépôts'), depots = [], ens = [];
+  let cur = null, started = false;
+  for (let i = 0; i < dp.length; i++) {
+    const t = str(dp[i] && dp[i][0]);
+    if (!t) continue;
+    if (t === 'Magasin') { if (started) break; started = true; continue; }
+    if (!started) continue;
+    if (/^Total pôle$/i.test(t)) break;
+    if (/^Dépôt /.test(t)) { cur = { name: t, mags: [] }; depots.push(cur); continue; }
+    if (/^Total dépôt/i.test(t)) { cur = null; continue; }
+    if (/^Total /.test(t)) { ens.push(t.slice(6)); continue; }
+    if (cur) cur.mags.push(t);
+  }
+  if (!depots.length) throw new Error('onglet Dépôts illisible');
+  const mags = depots.flatMap(x => x.mags);
+  const ensOf = m => ens.find(e => m.startsWith(e)) || '';
+  return { live, hist, anc, obj, clo, depots, ens, mags, ensOf, stamp };
+}
+function makeCalc(M, today) {
+  today = today || new Date();
+  const ty = today.getFullYear(), tm = today.getMonth() + 1;
+  const fut = (y, m) => y > ty || (y === ty && m > tm);
+  const cache = {};
+  function val(t, mag, y, m) { // null = mois futur
+    if (fut(y, m)) return null;
+    const k = t + '|' + mag + '|' + y + '|' + m;
+    if (k in cache) return cache[k];
+    const l = M.live[k];
+    const v = !l ? (M.hist[k] || 0) : (t === 'FACT' ? l.ht : l.ttc) + (M.anc[k] || 0);
+    return (cache[k] = v);
+  }
+  const months = (t, mags, y) => { const a = [null]; for (let m = 1; m <= 12; m++) { if (fut(y, m)) { a.push(null); continue; } let s = 0; for (const g of mags) s += val(t, g, y, m); a.push(s); } return a; };
+  const objM = (mags, y) => { const a = [null]; for (let m = 1; m <= 12; m++) { let s = 0; for (const g of mags) { const o = M.obj[y + '|' + g]; if (o) s += o[m]; } a.push(s); } return a; };
+  const closed = (y, m) => !!(M.clo[y] && M.clo[y][m]);
+  const yearTotal = (t, mags, y) => { // années connues seulement en total annuel (mois 0)
+    let tot = 0;
+    for (const g of mags) { let s = 0; for (let m = 1; m <= 12; m++) s += val(t, g, y, m) || 0; if (s === 0) s = M.hist[t + '|' + g + '|' + y + '|0'] || 0; tot += s; }
+    return tot;
+  };
+  const objFinal = (mags, y) => { const n = months('FACT', mags, y), o = objM(mags, y); let s = 0; for (let m = 1; m <= 12; m++) s += closed(y, m) ? (n[m] || 0) : o[m]; return s; };
+  const aDate = y => y < ty ? 12 : y > ty ? 0 : tm - 1; // mois complets
+  return { val, months, objM, closed, yearTotal, objFinal, aDate, ty, tm, fut };
+}
+/*ENDCALC*/
+
+// ---------- État ----------
+let M = null, C = null;
+const S = Object.assign({ t: 'FACT', mode: 'annee', y: null, m: null, q: null, scope: 'pole' }, store.get('ui', {}));
+const saveUI = () => store.set('ui', { t: S.t, mode: S.mode, scope: S.scope });
+function scopeMags(sc) {
+  if (sc === 'pole') return M.mags;
+  const [k, v] = [sc.slice(0, 4), sc.slice(4)];
+  if (k === 'dep:') { const d = M.depots.find(x => x.name === v); return d ? d.mags : M.mags; }
+  if (k === 'ens:') return M.mags.filter(g => M.ensOf(g) === v);
+  if (k === 'mag:') return M.mags.includes(v) ? [v] : M.mags;
+  return M.mags;
+}
+function scopeName(sc) { return sc === 'pole' ? 'Total pôle' : sc.slice(4); }
+function scopeValid(sc) { if (sc === 'pole') return true; const v = sc.slice(4); return sc.startsWith('dep:') ? M.depots.some(d => d.name === v) : sc.startsWith('ens:') ? M.ens.includes(v) : M.mags.includes(v); }
+
+// Mois de la période choisie
+function periodMonths() {
+  if (S.mode === 'mois') return [S.m];
+  if (S.mode === 'trim') return [3 * S.q - 2, 3 * S.q - 1, 3 * S.q];
+  return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+}
+function sumM(arr, ms) { let s = 0, any = false; for (const m of ms) if (arr[m] != null) { s += arr[m]; any = true; } return any ? s : null; }
+function stats(mags) {
+  const y = S.y, isF = S.t === 'FACT';
+  const n = C.months(S.t, mags, y), n1 = C.months(S.t, mags, y - 1), ob = isF ? C.objM(mags, y) : null;
+  const res = { n, n1, ob };
+  if (S.mode === 'annee') {
+    const k = C.aDate(y), ms = []; for (let m = 1; m <= k; m++) ms.push(m);
+    res.ms = ms; res.k = k;
+    res.v = k ? sumM(n, ms) : null; res.v1 = k ? sumM(n1, ms) : null;
+    res.tot = C.yearTotal(S.t, mags, y); res.tot1 = C.yearTotal(S.t, mags, y - 1);
+    res.cur = (y === C.ty && n[C.tm] != null) ? n[C.tm] : null;
+    if (isF) { res.objY = ob.slice(1).reduce((a, b) => a + b, 0); res.objF = C.objFinal(mags, y); }
+    if (!k) { res.v = res.tot; res.v1 = res.tot1; }
+  } else {
+    const ms = periodMonths().filter(m => !C.fut(y, m));
+    res.ms = ms; res.partial = ms.includes(C.tm) && y === C.ty; res.none = !ms.length;
+    res.v = sumM(n, ms); res.v1 = sumM(n1, ms);
+    if (isF) res.objP = periodMonths().reduce((a, m) => a + ob[m], 0);
+  }
+  res.ev = res.v != null && res.v1 ? res.v / res.v1 - 1 : null;
+  return res;
+}
+const evPill = ev => ev == null ? '<span class="pill flat">–</span>' : `<span class="pill ${ev > 0.0005 ? 'up' : ev < -0.0005 ? 'down' : 'flat'}">${ev > 0.0005 ? '▲' : ev < -0.0005 ? '▼' : '='} ${pct(ev).replace('+', '')}</span>`;
+
+// ---------- Rendu ----------
+function render() {
+  const main = $('#main');
+  if (!M) { renderWelcome(); return; }
+  if (!scopeValid(S.scope)) S.scope = 'pole';
+  const isF = S.t === 'FACT', st = stats(scopeMags(S.scope));
+  const yrs = []; for (let y = C.ty; y >= 2012; y--) yrs.push(y);
+  const perLabel = S.mode === 'mois' ? MOIS[S.m - 1] + ' ' + S.y : S.mode === 'trim' ? 'T' + S.q + ' ' + S.y : 'Année ' + S.y;
+  const chips = [];
+  chips.push(`<button class="chip" data-sc="pole" aria-pressed="${S.scope === 'pole'}">Total pôle</button>`);
+  M.depots.forEach(d => chips.push(`<button class="chip" data-sc="dep:${esc(d.name)}" aria-pressed="${S.scope === 'dep:' + d.name}">${esc(d.name)}</button>`));
+  chips.push('<span class="chip sep">|</span>');
+  M.ens.forEach(e => chips.push(`<button class="chip" data-sc="ens:${esc(e)}" aria-pressed="${S.scope === 'ens:' + e}">${esc(e)}</button>`));
+  chips.push('<span class="chip sep">|</span>');
+  M.mags.forEach(g => chips.push(`<button class="chip" data-sc="mag:${esc(g)}" aria-pressed="${S.scope === 'mag:' + g}">${esc(g)}</button>`));
+  let sub = '';
+  if (S.mode === 'mois') sub = `<div class="scroller" id="sc-m">${MOIS.map((x, i) => `<button class="chip" data-m="${i + 1}" aria-pressed="${S.m === i + 1}" ${C.fut(S.y, i + 1) ? 'disabled style="opacity:.4"' : ''}>${x}</button>`).join('')}</div>`;
+  if (S.mode === 'trim') sub = `<div class="seg">${[1, 2, 3, 4].map(q => `<button data-q="${q}" aria-pressed="${S.q === q}">T${q}</button>`).join('')}</div>`;
+
+  // Chiffre principal
+  let heroLbl, heroNote = '';
+  if (S.mode === 'annee') {
+    heroLbl = st.k === 12 ? `Année ${S.y}` : st.k ? `À date · janvier → ${MOIS[st.k - 1].toLowerCase()} ${S.y}` : `Année ${S.y}`;
+    if (st.cur != null) heroNote = `${MOIS[C.tm - 1]} en cours : <b class="num">${eur(st.cur)}</b> (non compté dans « à date »)`;
+  } else {
+    heroLbl = perLabel + (st.partial ? ' · mois en cours' : '');
+    if (st.partial) heroNote = `Comparaison avec les mêmes mois de ${S.y - 1}. ${MOIS[C.tm - 1]} n'est pas terminé.`;
+    if (st.none) heroNote = 'Période pas encore commencée.';
+  }
+  let objHTML = '';
+  if (isF) {
+    if (S.mode === 'annee') {
+      const p = st.objY ? st.tot / st.objY : null;
+      objHTML = `<div class="obj">
+        <div class="objline"><span>Réalisé ${S.y} / objectif année</span><b>${pct0(p)}</b></div>
+        <div class="bar"><i style="width:${Math.min(100, (p || 0) * 100)}%"></i></div>
+        <div class="kpis">
+          <div class="kpi"><span>Réalisé ${S.y}</span><b>${eur(st.tot)}</b></div>
+          <div class="kpi"><span>Objectif ${S.y}</span><b>${eur(st.objY)}</b></div>
+          <div class="kpi"><span>Objectif final</span><b>${eur(st.objF)}</b></div>
+          <div class="kpi"><span>Total ${S.y - 1}</span><b>${eur(st.tot1)}</b></div>
+        </div>
+        <p class="note">Objectif final = réalisé des mois clôturés + objectifs des autres mois.</p></div>`;
+    } else {
+      const p = st.objP && st.v != null ? st.v / st.objP : null;
+      objHTML = `<div class="obj">
+        <div class="objline"><span>Objectif ${perLabel} : <b>${eur(st.objP)}</b></span><b>${pct0(p)}</b></div>
+        <div class="bar"><i style="width:${Math.min(100, (p || 0) * 100)}%"></i></div>
+        ${st.objP && st.v != null ? `<div class="objline"><span>Reste à faire</span><b>${eur(Math.max(0, st.objP - st.v))}</b></div>` : ''}</div>`;
+    }
+  } else if (S.mode === 'annee') {
+    objHTML = `<div class="obj"><div class="kpis"><div class="kpi"><span>Total ${S.y}</span><b>${eur(st.tot)}</b></div><div class="kpi"><span>Total ${S.y - 1}</span><b>${eur(st.tot1)}</b></div></div></div>`;
+  }
+
+  main.innerHTML = `
+  <section class="controls" aria-label="Réglages de l'affichage">
+    <div class="seg" id="seg-t"><button data-t="FACT" aria-pressed="${isF}">Facturé HT</button><button data-t="CA" aria-pressed="${!isF}">Prise de commande TTC</button></div>
+    <div class="ctlrow">
+      <div class="seg" id="seg-mode"><button data-mode="mois" aria-pressed="${S.mode === 'mois'}">Mois</button><button data-mode="trim" aria-pressed="${S.mode === 'trim'}">Trimestre</button><button data-mode="annee" aria-pressed="${S.mode === 'annee'}">Année</button></div>
+      <select class="yr" id="yr" aria-label="Année">${yrs.map(y => `<option ${y === S.y ? 'selected' : ''}>${y}</option>`).join('')}</select>
+    </div>
+    ${sub}
+    <div class="scroller" id="sc-scope">${chips.join('')}</div>
+  </section>
+  <section class="panel hero">
+    <h3>${esc(scopeName(S.scope))} · ${isF ? 'Facturé HT' : 'Prise de commande TTC'}</h3>
+    <div class="lbl">${esc(heroLbl)}</div>
+    <div class="big">${st.v == null ? '–' : eur(st.v)}</div>
+    <div class="cmp">${evPill(st.ev)}<span>${S.y - 1} : <b class="num">${eur(st.v1)}</b></span></div>
+    ${heroNote ? `<p class="note">${heroNote}</p>` : ''}
+    ${objHTML}
+  </section>
+  <section class="panel">
+    <div class="sectitle"><h3>Mois par mois</h3></div>
+    <div class="legend"><span><i style="background:var(--s-n)"></i>${S.y}</span><span><i style="background:var(--s-n1)"></i>${S.y - 1}</span>${isF ? '<span><i class="tick" style="background:var(--s-obj)"></i>Objectif</span>' : ''}</div>
+    <div class="chart" id="chart"></div>
+    <p class="hint">Touchez un mois pour voir ses chiffres.</p>
+  </section>
+  ${breakdownHTML(st)}
+  ${tableHTML(st)}
+  <p class="ver">Version ${esc(window.APP_VERSION)} · lecture seule</p>`;
+  drawChart(st);
+  bind();
+}
+function rowsFor() {
+  // Lignes du détail selon le périmètre choisi
+  const out = [];
+  if (S.scope === 'pole') {
+    out.push({ h: 'Par dépôt' }); M.depots.forEach(d => out.push({ sc: 'dep:' + d.name, name: d.name, mags: d.mags, sub: d.mags.length + ' magasin' + (d.mags.length > 1 ? 's' : '') }));
+    out.push({ h: 'Par enseigne' }); M.ens.forEach(e => out.push({ sc: 'ens:' + e, name: e, mags: M.mags.filter(g => M.ensOf(g) === e) }));
+    out.push({ h: 'Par magasin' }); M.mags.forEach(g => out.push({ sc: 'mag:' + g, name: g, mags: [g] }));
+  } else if (S.scope.startsWith('mag:')) {
+    const g = S.scope.slice(4), d = M.depots.find(x => x.mags.includes(g));
+    out.push({ h: 'Comparer avec' });
+    if (d) out.push({ sc: 'dep:' + d.name, name: d.name, mags: d.mags });
+    out.push({ sc: 'ens:' + M.ensOf(g), name: M.ensOf(g), mags: M.mags.filter(x => M.ensOf(x) === M.ensOf(g)) });
+    out.push({ sc: 'pole', name: 'Total pôle', mags: M.mags });
+  } else {
+    out.push({ h: 'Magasins' }); scopeMags(S.scope).forEach(g => out.push({ sc: 'mag:' + g, name: g, mags: [g] }));
+  }
+  return out;
+}
+function breakdownHTML() {
+  const isF = S.t === 'FACT';
+  let html = '', open = false;
+  for (const r of rowsFor()) {
+    if (r.h) { if (open) html += '</div>'; html += `<div class="sectitle"><h3>${esc(r.h)}</h3>${!open ? `<span class="hint">${S.mode === 'annee' && C.aDate(S.y) && C.aDate(S.y) < 12 ? 'à date, % obj. sur l\u2019année' : ''}</span>` : ''}</div><div class="list">`; open = true; continue; }
+    const s = stats(r.mags);
+    let objBit = '';
+    if (isF) {
+      const o = S.mode === 'annee' ? s.objY : s.objP, v = S.mode === 'annee' ? s.tot : s.v;
+      const p = o && v != null ? v / o : null;
+      objBit = `<span class="bar"><i style="width:${Math.min(100, (p || 0) * 100)}%"></i></span><span>${pct0(p)} obj.</span>`;
+    }
+    html += `<button class="item" data-sc="${esc(r.sc)}"><span class="t">${esc(r.name)}</span><span class="v">${keur(s.v)}</span>
+      <span class="m">${objBit || esc(r.sub || '')}</span><span class="e">${evPill(s.ev)}</span></button>`;
+  }
+  if (open) html += '</div>';
+  return html;
+}
+function tableHTML(st) {
+  const isF = S.t === 'FACT';
+  let rows = '';
+  for (let m = 1; m <= 12; m++) {
+    const n = st.n[m], n1 = st.n1[m], ev = n != null && n1 ? n / n1 - 1 : null;
+    rows += `<tr><td>${MOIS[m - 1]}</td><td>${eur(n)}</td><td>${eur(n1)}</td><td>${pct(ev)}</td>${isF ? `<td>${eur(st.ob[m])}</td><td>${C.closed(S.y, m) ? 'Oui' : 'Non'}</td>` : ''}</tr>`;
+  }
+  return `<details class="tbl"><summary>Tableau des 12 mois</summary><div class="tblwrap"><table>
+    <thead><tr><th>Mois</th><th>${S.y}</th><th>${S.y - 1}</th><th>Évol.</th>${isF ? '<th>Objectif</th><th>Clôturé</th>' : ''}</tr></thead><tbody>${rows}</tbody></table></div></details>`;
+}
+function drawChart(st) {
+  const el = $('#chart'), isF = S.t === 'FACT';
+  const W = 340, H = 190, L = 40, R = 6, T = 10, B = 22, pw = W - L - R, ph = H - T - B;
+  let max = 0; for (let m = 1; m <= 12; m++) max = Math.max(max, st.n[m] || 0, st.n1[m] || 0, isF ? st.ob[m] || 0 : 0);
+  if (!max) max = 1;
+  const step = niceStep(max / 4), top = Math.ceil(max / step) * step;
+  const yv = v => T + ph - (v / top) * ph, cw = pw / 12, bw = Math.min(10, (cw - 6) / 2);
+  const sel = new Set(periodMonths());
+  let g = '';
+  for (let v = 0; v <= top + 1e-6; v += step) g += `<line x1="${L}" x2="${W - R}" y1="${yv(v)}" y2="${yv(v)}" stroke="var(--grid)" stroke-width="1"/><text x="${L - 6}" y="${yv(v) + 3.5}" text-anchor="end" font-size="9.5" fill="var(--muted)">${keur(v).replace(' €', '')}</text>`;
+  const bar = (x, v, col) => { if (v == null || v <= 0) return ''; const y = yv(v), h = T + ph - y, r = Math.min(3, h); return `<path d="M${x},${T + ph} V${y + r} q0,-${r} ${r},-${r} h${bw - 2 * r} q${r},0 ${r},${r} V${T + ph} Z" fill="${col}"/>`; };
+  let marks = '';
+  for (let m = 1; m <= 12; m++) {
+    const cx = L + cw * (m - 0.5), op = sel.has(m) || S.mode === 'annee' ? 1 : 0.35;
+    marks += `<g opacity="${op}">${bar(cx - bw - 1, st.n1[m], 'var(--s-n1)')}${bar(cx + 1, st.n[m], 'var(--s-n)')}`;
+    if (isF && st.ob[m]) marks += `<line x1="${cx - bw - 3}" x2="${cx + bw + 3}" y1="${yv(st.ob[m])}" y2="${yv(st.ob[m])}" stroke="var(--s-obj)" stroke-width="2" stroke-linecap="round"/>`;
+    marks += `</g><text x="${cx}" y="${H - 6}" text-anchor="middle" font-size="10" fill="var(--muted)" font-weight="${sel.has(m) && S.mode !== 'annee' ? 700 : 400}">${MC[m - 1]}</text>`;
+    marks += `<rect x="${L + cw * (m - 1)}" y="${T}" width="${cw}" height="${ph + B}" fill="transparent" data-hm="${m}"/>`;
+  }
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Montants par mois ${S.y} et ${S.y - 1}">${g}<line x1="${L}" x2="${W - R}" y1="${T + ph}" y2="${T + ph}" stroke="var(--line)"/>${marks}</svg><div class="tip" hidden></div>`;
+  const tip = el.querySelector('.tip');
+  const show = m => {
+    const n = st.n[m], n1 = st.n1[m];
+    tip.innerHTML = `<b>${MOIS[m - 1]}</b><div class="r"><span>${S.y}</span><span>${eur(n)}</span></div><div class="r"><span>${S.y - 1}</span><span>${eur(n1)}</span></div>${n != null && n1 ? `<div class="r"><span>Évol.</span><span>${pct(n / n1 - 1)}</span></div>` : ''}${isF && st.ob[m] ? `<div class="r"><span>Objectif</span><span>${eur(st.ob[m])}</span></div>` : ''}`;
+    tip.hidden = false;
+    const box = el.getBoundingClientRect(), sx = box.width / W;
+    let x = (L + cw * (m - 0.5)) * sx; x = Math.max(85, Math.min(box.width - 85, x));
+    tip.style.left = x + 'px'; tip.style.top = (T * sx) + 'px';
+  };
+  el.querySelectorAll('[data-hm]').forEach(r => {
+    r.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') show(+r.dataset.hm); });
+    r.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') tip.hidden = true; });
+    r.addEventListener('click', () => { show(+r.dataset.hm); clearTimeout(drawChart.t); drawChart.t = setTimeout(() => tip.hidden = true, 3500); });
+  });
+}
+function niceStep(x) { const p = Math.pow(10, Math.floor(Math.log10(x))), f = x / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p; }
+function bind() {
+  document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { S.t = b.dataset.t; saveUI(); render(); });
+  document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { S.mode = b.dataset.mode; saveUI(); render(); });
+  document.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { S.m = +b.dataset.m; render(); });
+  document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { S.q = +b.dataset.q; render(); });
+  document.querySelectorAll('[data-sc]').forEach(b => b.onclick = () => { S.scope = b.dataset.sc; saveUI(); render(); if (b.classList.contains('item')) window.scrollTo({ top: 0, behavior: 'smooth' }); });
+  $('#yr').onchange = e => { S.y = +e.target.value; render(); };
+  const ch = document.querySelector('#sc-scope [aria-pressed="true"]'); if (ch) ch.scrollIntoView({ block: 'nearest', inline: 'center' });
+  const cm = document.querySelector('#sc-m [aria-pressed="true"]'); if (cm) cm.scrollIntoView({ block: 'nearest', inline: 'center' });
+}
+function renderWelcome() {
+  $('#main').innerHTML = `<section class="panel"><h2>Suivi CA</h2>
+    <p class="lead">Vos chiffres de facturation et de prise de commande, par magasin, dépôt et enseigne, comparés à l'année précédente et à vos objectifs.</p>
+    ${odAvailable() ? `<p>Connectez votre compte Microsoft professionnel, puis choisissez le fichier <b>Suivi CA live.xlsx</b> (OneDrive, dossier Apps\\Suivi CA).</p>
+    <button class="btn primary" id="w-set">Se connecter et choisir le fichier</button>` : ''}
+    <button class="btn" id="w-file">Ouvrir un fichier depuis cet appareil</button>
+    <p class="hint">Lecture seule : l'appli télécharge une copie du fichier, elle ne le modifie jamais.</p></section>
+    <p class="ver">Version ${esc(window.APP_VERSION)}</p>`;
+  if ($('#w-set')) $('#w-set').onclick = openSettings;
+  $('#w-file').onclick = () => $('#file').click();
+}
+function setStatus() {
+  const dot = $('#st-dot'), txt = $('#st-txt');
+  $('#btn-refresh').hidden = !od.link;
+  if (!M) { dot.className = 'dot'; txt.textContent = od.link ? 'Chargement…' : 'Aucune donnée'; return; }
+  const age = M.stamp ? Date.now() - M.stamp : null;
+  dot.className = 'dot ' + (age != null && age < 3 * 3600e3 ? 'on' : 'warn');
+  txt.textContent = M.stamp ? 'Données du ' + fmtDT(M.stamp) : 'Données chargées';
+}
+
+// ---------- Chargement ----------
+function loadBuffer(buf, meta) {
+  const wb = XLSX.read(buf, { type: 'array', cellDates: false });
+  const model = parseModel(wb);
+  M = model; C = makeCalc(M);
+  if (!S.y || S.y > C.ty) S.y = C.ty;
+  if (!S.m) S.m = Math.max(1, C.tm - 1 || 1);
+  if (!S.q) S.q = Math.ceil(C.tm / 3);
+  idbSet('wb', { buf, meta: meta || {} });
+  setStatus(); render();
+}
+window.__loadBuffer = loadBuffer;
+const idb = new Promise(res => { try { const r = indexedDB.open('suivica', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => res(null); } catch (e) { res(null); } });
+async function idbSet(k, v) { const db = await idb; if (!db) return; try { db.transaction('kv', 'readwrite').objectStore('kv').put(v, k); } catch (e) {} }
+async function idbGet(k) { const db = await idb; if (!db) return null; return new Promise(res => { try { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); } catch (e) { res(null); } }); }
+$('#file').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { loadBuffer(new Uint8Array(await f.arrayBuffer()), { name: f.name, local: true }); closeSheet(); toast('Fichier chargé'); } catch (er) { toast('Lecture impossible : ' + (er.message || er)); } e.target.value = ''; };
+
+// ---------- OneDrive (même connexion que Scan Stock : compte pro, lecture seule) ----------
+const inFrame = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+const MS = { clientId: 'bb277b0b-f13b-40b6-b63a-e5a5acfc08db', authority: 'https://login.microsoftonline.com/6167cd2c-9a99-425b-8a64-4177b6be728c', scopes: ['Files.Read', 'User.Read'] };
+MS.meta = (t => ({ authorization_endpoint: `https://login.microsoftonline.com/${t}/oauth2/v2.0/authorize`, token_endpoint: `https://login.microsoftonline.com/${t}/oauth2/v2.0/token`, end_session_endpoint: `https://login.microsoftonline.com/${t}/oauth2/v2.0/logout`, issuer: `https://login.microsoftonline.com/${t}/v2.0`, jwks_uri: `https://login.microsoftonline.com/${t}/discovery/v2.0/keys` }))('6167cd2c-9a99-425b-8a64-4177b6be728c');
+const od = { app: null, account: null, link: store.get('odlink', null), lastCheck: 0, busy: false, ready: null, mod: store.get('odmod', 0) };
+const odAvailable = () => !inFrame && !!window.msal;
+function odInit() {
+  if (!odAvailable()) return Promise.resolve();
+  if (od.ready) return od.ready;
+  od.ready = (async () => {
+    od.app = new msal.PublicClientApplication({ auth: { clientId: MS.clientId, authority: MS.authority, knownAuthorities: ['login.microsoftonline.com'], authorityMetadata: JSON.stringify(MS.meta), redirectUri: location.origin + location.pathname, navigateToLoginRequestUrl: false }, cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: true } });
+    try { const r = await od.app.handleRedirectPromise(); if (r && r.account) { od.account = r.account; od.justLogged = true; } }
+    catch (e) { toast('Connexion Microsoft refusée : ' + (e.errorMessage || e.message || e)); }
+    if (!od.account) od.account = od.app.getAllAccounts()[0] || null;
+  })();
+  return od.ready;
+}
+async function odToken(interactive) {
+  await odInit(); if (!od.app) return null;
+  if (!od.account) { if (interactive) await od.app.loginRedirect({ scopes: MS.scopes, prompt: 'select_account' }); return null; }
+  try { return (await od.app.acquireTokenSilent({ scopes: MS.scopes, account: od.account })).accessToken; }
+  catch (e) { if (interactive) await od.app.acquireTokenRedirect({ scopes: MS.scopes, account: od.account }); return null; }
+}
+async function graph(path, token) {
+  const r = await fetch('https://graph.microsoft.com/v1.0' + path, { headers: { Authorization: 'Bearer ' + token } });
+  if (!r.ok) throw new Error(r.status === 404 ? 'fichier introuvable sur OneDrive' : 'OneDrive a répondu ' + r.status);
+  return r.json();
+}
+async function odRefresh({ force = false, interactive = false, quiet = false } = {}) {
+  if (!od.link || od.busy) return;
+  od.busy = true; $('#btn-refresh').classList.add('busy');
+  try {
+    const tk = await odToken(interactive);
+    if (!tk) { if (!quiet) toast('Connexion OneDrive expirée : touchez Actualiser pour vous reconnecter.'); return; }
+    const meta = await graph(`/drives/${encodeURIComponent(od.link.driveId)}/items/${encodeURIComponent(od.link.id)}`, tk);
+    od.lastCheck = Date.now();
+    const mod = Date.parse(meta.lastModifiedDateTime);
+    if (!force && M && od.mod === mod) { if (!quiet) toast('Déjà à jour'); return; }
+    const url = meta['@microsoft.graph.downloadUrl'];
+    const buf = await (url ? fetch(url) : fetch(`https://graph.microsoft.com/v1.0/drives/${encodeURIComponent(od.link.driveId)}/items/${encodeURIComponent(od.link.id)}/content`, { headers: { Authorization: 'Bearer ' + tk } })).then(r => { if (!r.ok) throw new Error('téléchargement ' + r.status); return r.arrayBuffer(); });
+    loadBuffer(new Uint8Array(buf), { name: meta.name, mod });
+    od.mod = mod; store.set('odmod', mod);
+    if (!quiet) toast('Données actualisées');
+  } catch (e) { if (!quiet) toast('Actualisation impossible : ' + (e.message || e)); }
+  finally { od.busy = false; $('#btn-refresh').classList.remove('busy'); }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && od.link && Date.now() - od.lastCheck > 2 * 60000) odRefresh({ quiet: true }); });
+$('#btn-refresh').onclick = () => odRefresh({ interactive: true });
+$('#btn-set').onclick = openSettings;
+function closeSheet() { $('#sheet').hidden = true; }
+$('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
+function openSettings() {
+  let body;
+  if (!odAvailable()) body = '<p class="lead">La connexion OneDrive fonctionne dans l’appli installée (icône sur l’écran d’accueil).</p>';
+  else if (!od.account) body = `<p class="lead">Connectez votre compte Microsoft professionnel : l'appli ira chercher la dernière version du fichier sur votre OneDrive.</p><button class="btn primary" id="od-login">Se connecter à OneDrive</button>`;
+  else body = `<dl><dt>Compte</dt><dd>${esc(od.account.username || od.account.name || '')}</dd>
+      <dt>Fichier suivi</dt><dd>${od.link ? esc(od.link.name) : '<span style="color:var(--bad)">aucun, choisissez-le ci-dessous</span>'}</dd>
+      ${od.lastCheck ? `<dt>Dernière vérification</dt><dd>${fmtDT(od.lastCheck)}</dd>` : ''}</dl>
+    ${od.link ? '<div class="row"><button class="btn primary" id="od-now">Actualiser maintenant</button><button class="btn" id="od-change">Changer de fichier</button></div>' : ''}
+    <div id="od-pick" ${od.link ? 'hidden' : ''}>
+      <form class="field" id="od-search"><input id="od-q" value="Suivi CA live" aria-label="Nom du fichier"><button class="btn" type="submit">Chercher</button></form>
+      <div class="list" id="od-res" style="margin-top:8px"><div class="empty">Cherchez le fichier par une partie de son nom.</div></div>
+    </div>
+    <button class="btn danger" id="od-logout" style="align-self:flex-start">Déconnecter OneDrive</button>`;
+  $('#sheet-in').innerHTML = `<div class="sheet-head"><h2>Réglages</h2><button class="iconbtn" id="sh-x" aria-label="Fermer">✕</button></div>
+    <div class="panel"><h3>OneDrive</h3>${body}<p class="hint">Lecture seule : l'appli télécharge une copie du fichier, elle ne le modifie jamais.</p></div>
+    <div class="panel"><h3>Autre source</h3><button class="btn" id="sh-file">Ouvrir un fichier depuis cet appareil</button></div>
+    <p class="ver">Version ${esc(window.APP_VERSION)}</p>`;
+  $('#sheet').hidden = false;
+  const b = id => document.getElementById(id);
+  b('sh-x').onclick = closeSheet;
+  b('sh-file').onclick = () => $('#file').click();
+  if (b('od-login')) b('od-login').onclick = () => odToken(true);
+  if (b('od-now')) b('od-now').onclick = () => { closeSheet(); odRefresh({ interactive: true, force: true }); };
+  if (b('od-change')) b('od-change').onclick = () => { b('od-pick').hidden = false; };
+  if (b('od-logout')) b('od-logout').onclick = async () => { od.link = null; store.del('odlink'); try { await od.app.logoutRedirect({ account: od.account, onRedirectNavigate: () => false }); } catch (e) {} od.account = null; closeSheet(); setStatus(); toast('OneDrive déconnecté'); };
+  if (b('od-search')) b('od-search').addEventListener('submit', async ev => {
+    ev.preventDefault(); const q = b('od-q').value.trim() || 'xlsx'; const res = b('od-res');
+    res.innerHTML = '<div class="empty">Recherche…</div>';
+    try {
+      const tk = await odToken(true); if (!tk) return;
+      const j = await graph(`/me/drive/root/search(q='${encodeURIComponent(q.replace(/'/g, "''"))}')?$top=40`, tk);
+      const files = (j.value || []).filter(f => f.file && /\.xls[xm]?$/i.test(f.name));
+      res.innerHTML = files.length ? files.map((f, n) => `<button class="item" data-odf="${n}"><span class="t">${esc(f.name)}</span><span class="m">${esc((f.parentReference && f.parentReference.path || '').replace(/^\/drive\/root:?/, '') || 'OneDrive')} · ${fmtDT(Date.parse(f.lastModifiedDateTime))}</span></button>`).join('') : '<div class="empty">Aucun fichier Excel trouvé avec ce nom.</div>';
+      res.querySelectorAll('[data-odf]').forEach(el => el.onclick = () => {
+        const f = files[+el.dataset.odf];
+        od.link = { id: f.id, driveId: f.parentReference.driveId, name: f.name }; store.set('odlink', od.link);
+        closeSheet(); setStatus(); odRefresh({ interactive: true, force: true });
+      });
+    } catch (e) { res.innerHTML = `<div class="empty" style="color:var(--bad)">${esc(e.message || e)}</div>`; }
+  });
+}
+
+// ---------- Démarrage ----------
+(async () => {
+  setStatus(); render();
+  const saved = await idbGet('wb');
+  if (saved && saved.buf) { try { loadBuffer(saved.buf, saved.meta); } catch (e) {} }
+  await odInit();
+  if (od.justLogged && !od.link) openSettings();
+  if (od.link && od.account) odRefresh({ quiet: !!M });
+})();
+if ('serviceWorker' in navigator && !inFrame) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { scope: './' }).catch(() => {}));
+</script>
+</body>
+</html>
