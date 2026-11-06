@@ -15,7 +15,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script>window.APP_VERSION = '06/11 18:09';</script>
+<script>window.APP_VERSION = '06/11 18:19';</script>
 <style>
 /* Suivi CA : une colonne mobile. Barre du haut (fraîcheur des données), réglages (mesure, période, périmètre),
    chiffre principal, graphique 12 mois N / N-1 / objectif, détail par dépôt, enseigne et magasin. */
@@ -338,7 +338,8 @@ function render() {
   if (!scopeValid(S.scope) || (S.t === 'CA' && S.scope.startsWith('dep:'))) S.scope = 'pole'; // pas de dépôts en prise de commande
   document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.tab === S.t ? 'page' : 'false'));
   $('#tabs').hidden = false;
-  const isF = S.t === 'FACT', st = stats(scopeMags(S.scope));
+  if (S.mode === 'jour' && !jourOK()) S.mode = 'annee';
+  const isF = S.t === 'FACT', st = S.mode === 'jour' ? null : stats(scopeMags(S.scope));
   const yrs = []; for (let y = C.ty; y >= 2012; y--) yrs.push(y);
   const perLabel = S.mode === 'mois' ? MOIS[S.m - 1] + ' ' + S.y : S.mode === 'trim' ? 'T' + S.q + ' ' + S.y : 'Année ' + S.y;
   const chips = [];
@@ -354,6 +355,7 @@ function render() {
   if (S.mode === 'mois') sub = `<div class="scroller" id="sc-m">${MOIS.map((x, i) => `<button class="chip" data-m="${i + 1}" aria-pressed="${S.m === i + 1}" ${C.fut(S.y, i + 1) ? 'disabled style="opacity:.4"' : ''}>${x}</button>`).join('')}</div>`;
   if (S.mode === 'trim') sub = `<div class="seg">${[1, 2, 3, 4].map(q => `<button data-q="${q}" aria-pressed="${S.q === q}">T${q}</button>`).join('')}</div>`;
 
+  if (S.mode === 'jour') { renderJour(chips); return; }
   // Chiffre principal
   let heroLbl, heroNote = '';
   if (S.mode === 'annee') {
@@ -393,7 +395,7 @@ function render() {
   main.innerHTML = `
   <section class="controls" aria-label="Réglages de l'affichage">
     <div class="ctlrow">
-      <div class="seg" id="seg-mode"><button data-mode="mois" aria-pressed="${S.mode === 'mois'}">Mois</button><button data-mode="trim" aria-pressed="${S.mode === 'trim'}">Trimestre</button><button data-mode="annee" aria-pressed="${S.mode === 'annee'}">Année</button></div>
+      <div class="seg" id="seg-mode">${jourOK() ? `<button data-mode="jour" aria-pressed="${S.mode === 'jour'}">Jour</button>` : ''}<button data-mode="mois" aria-pressed="${S.mode === 'mois'}">Mois</button><button data-mode="trim" aria-pressed="${S.mode === 'trim'}">Trimestre</button><button data-mode="annee" aria-pressed="${S.mode === 'annee'}">Année</button></div>
       <select class="yr" id="yr" aria-label="Année">${yrs.map(y => `<option ${y === S.y ? 'selected' : ''}>${y}</option>`).join('')}</select>
     </div>
     ${sub}
@@ -408,7 +410,6 @@ function render() {
     ${heroNote ? `<p class="note">${heroNote}</p>` : ''}
     ${objHTML}
   </section>
-  ${dayPanelHTML(scopeMags(S.scope))}
   <section class="panel">
     <div class="sectitle"><h3>Mois par mois</h3></div>
     <div class="legend"><span><i style="background:var(--s-n)"></i>${S.y}</span><span><i style="background:var(--s-n1)"></i>${S.y - 1}</span>${isF ? '<span><i class="tick" style="background:var(--s-obj)"></i>Objectif</span>' : ''}</div>
@@ -421,26 +422,48 @@ function render() {
   drawChart(st);
   bind();
 }
-// Prise de commande des 7 derniers jours (lignes CA_J), sans comparaison
-function dayPanelHTML(mags) {
-  if (S.t !== 'CA' || !M.jours || S.y !== C.ty) return '';
-  const ref = M.stamp ? new Date(M.stamp) : new Date();
-  const days = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - i);
-    const key = d.getFullYear() + '|' + ((d.getMonth() + 1) * 100 + d.getDate());
-    let ttc = 0, ht = 0; for (const g of mags) { const l = M.live['CA_J|' + g + '|' + key]; if (l) { ttc += l.ttc; ht += l.ht; } }
-    days.push({ d, ttc, ht });
+// ---------- Vue Jour (prise de commande des 7 derniers jours, lignes CA_J), sans comparaison ----------
+const jourOK = () => S.t === 'CA' && M && M.jours;
+function dayRef() { return M.stamp ? new Date(M.stamp) : new Date(); }
+function dayVal(mags, i) {
+  const ref = dayRef(), d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - i);
+  const key = d.getFullYear() + '|' + ((d.getMonth() + 1) * 100 + d.getDate());
+  let ttc = 0, ht = 0; for (const g of mags) { const l = M.live['CA_J|' + g + '|' + key]; if (l) { ttc += l.ttc; ht += l.ht; } }
+  return { d, ttc, ht };
+}
+const wdLong = d => { const t = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }); return t.charAt(0).toUpperCase() + t.slice(1); };
+const wdShort = d => { const t = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }); return t.charAt(0).toUpperCase() + t.slice(1); };
+function renderJour(chips) {
+  if (S.d == null || S.d < 0 || S.d > 6) S.d = 0;
+  const mags = scopeMags(S.scope), ref = dayRef(), isToday = new Date().toDateString() === ref.toDateString();
+  const days = []; for (let i = 0; i < 7; i++) days.push(dayVal(mags, i));
+  const cur = days[S.d], max = Math.max(1, ...days.map(x => x.ttc));
+  const lblDay = (i, d) => i === 0 && isToday ? 'Aujourd\u2019hui' : wdShort(d);
+  let bd = '', open = false;
+  for (const r of rowsFor()) {
+    if (r.h) { if (open) bd += '</div>'; bd += `<div class="sectitle"><h3>${esc(r.h)}</h3></div><div class="list">`; open = true; continue; }
+    bd += `<button class="item" data-sc="${esc(r.sc)}"><span class="t">${esc(r.name)}</span><span class="v">${eur(dayVal(r.mags, S.d).ttc)}</span></button>`;
   }
-  const wd = d => d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-  const t = days[0], isToday = new Date().toDateString() === ref.toDateString();
-  return `<section class="panel hero">
-    <h3>${esc(scopeName(S.scope))} · Commandé du jour</h3>
-    <div class="lbl">${isToday ? 'Aujourd\u2019hui, ' : ''}${esc(wd(t.d))} · données de ${ref.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
-    <div class="big">${eur(t.ttc)}</div>
-    <p class="note">TTC · ${eur(t.ht)} HT. Pas de comparaison avec l\u2019an dernier : le même jour ne tombe pas le même jour de la semaine.</p>
-    <div class="list">${days.slice(1).map(x => `<div class="item"><span class="t" style="font-weight:500">${esc(wd(x.d).replace(/^./, c => c.toUpperCase()))}</span><span class="v">${eur(x.ttc)}</span></div>`).join('')}</div>
-  </section>`;
+  if (open) bd += '</div>';
+  $('#main').innerHTML = `
+  <section class="controls" aria-label="Réglages de l'affichage">
+    <div class="seg" id="seg-mode"><button data-mode="jour" aria-pressed="true">Jour</button><button data-mode="mois" aria-pressed="false">Mois</button><button data-mode="trim" aria-pressed="false">Trimestre</button><button data-mode="annee" aria-pressed="false">Année</button></div>
+    <div class="scroller" id="sc-d">${days.map((x, i) => `<button class="chip" data-d="${i}" aria-pressed="${S.d === i}">${esc(lblDay(i, x.d))}</button>`).join('')}</div>
+    <div class="scroller" id="sc-scope">${chips.join('')}</div>
+  </section>
+  <section class="panel hero">
+    <h3>${esc(scopeName(S.scope))} · Prise de commande TTC</h3>
+    <div class="lbl">${S.d === 0 && isToday ? 'Aujourd\u2019hui, ' + esc(wdLong(cur.d).toLowerCase()) : esc(wdLong(cur.d))}</div>
+    <div class="big">${eur(cur.ttc)}</div>
+    <p class="note">${eur(cur.ht)} HT${S.d === 0 ? ' · données de ' + ref.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}. Pas de comparaison avec l\u2019an dernier : la même date ne tombe pas le même jour de la semaine.</p>
+  </section>
+  <section class="panel">
+    <div class="sectitle"><h3>7 derniers jours</h3></div>
+    <div class="list">${days.map((x, i) => `<button class="item" data-d="${i}" ${S.d === i ? 'style="background:var(--surface-2)"' : ''}><span class="t" style="font-weight:${S.d === i ? 700 : 500}">${esc(i === 0 && isToday ? 'Aujourd\u2019hui' : wdLong(x.d))}</span><span class="v">${eur(x.ttc)}</span><span class="m"><span class="bar" style="max-width:none"><i style="width:${Math.max(0, x.ttc) / max * 100}%"></i></span></span><span></span></button>`).join('')}</div>
+  </section>
+  ${bd}
+  <p class="ver">Version ${esc(window.APP_VERSION)} · lecture seule</p>`;
+  bind();
 }
 function rowsFor() {
   // Lignes du détail selon le périmètre choisi
@@ -527,10 +550,12 @@ function niceStep(x) { const p = Math.pow(10, Math.floor(Math.log10(x))), f = x 
 function bind() {
   document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { S.mode = b.dataset.mode; saveUI(); render(); });
   document.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { S.m = +b.dataset.m; render(); });
+  document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { S.d = +b.dataset.d; render(); });
   document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { S.q = +b.dataset.q; render(); });
   document.querySelectorAll('[data-sc]').forEach(b => b.onclick = () => { S.scope = b.dataset.sc; saveUI(); render(); if (b.classList.contains('item')) window.scrollTo({ top: 0, behavior: 'smooth' }); });
-  $('#yr').onchange = e => { S.y = +e.target.value; render(); };
+  if ($('#yr')) $('#yr').onchange = e => { S.y = +e.target.value; render(); };
   const ch = document.querySelector('#sc-scope [aria-pressed="true"]'); if (ch) ch.scrollIntoView({ block: 'nearest', inline: 'center' });
+  const cd = document.querySelector('#sc-d [aria-pressed="true"]'); if (cd) cd.scrollIntoView({ block: 'nearest', inline: 'center' });
   const cm = document.querySelector('#sc-m [aria-pressed="true"]'); if (cm) cm.scrollIntoView({ block: 'nearest', inline: 'center' });
 }
 function renderWelcome() {
