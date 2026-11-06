@@ -15,7 +15,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script>window.APP_VERSION = '06/11 17:53';</script>
+<script>window.APP_VERSION = '06/11 18:09';</script>
 <style>
 /* Suivi CA : une colonne mobile. Barre du haut (fraîcheur des données), réglages (mesure, période, périmètre),
    chiffre principal, graphique 12 mois N / N-1 / objectif, détail par dépôt, enseigne et magasin. */
@@ -104,6 +104,9 @@ select.yr{border:1px solid var(--line);background:var(--surface-2);border-radius
 .pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 9px;font-weight:600;font-size:13.5px;font-variant-numeric:tabular-nums}
 .pill.up{background:var(--ok-bg);color:var(--ok)} .pill.down{background:var(--bad-bg);color:var(--bad)} .pill.flat{background:var(--surface-2);color:var(--muted)}
 .note{font-size:12.5px;color:var(--muted)}
+.diff{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.diff.up{color:var(--ok)} .diff.down{color:var(--bad)}
+.diff span{font-size:13px;font-weight:500;color:var(--muted)}
 .obj{border-top:1px solid var(--line);padding-top:12px;margin-top:6px;display:flex;flex-direction:column;gap:8px}
 .objline{display:flex;justify-content:space-between;gap:10px;font-size:14px}
 .objline b{font-variant-numeric:tabular-nums}
@@ -355,11 +358,11 @@ function render() {
   let heroLbl, heroNote = '';
   if (S.mode === 'annee') {
     heroLbl = st.jour ? `Du 1er janvier au ${dayLbl()} ${S.y}` : st.k === 12 ? `Année ${S.y}` : st.k ? `À date · janvier → ${MOIS[st.k - 1].toLowerCase()} ${S.y}` : `Année ${S.y}`;
-    if (st.jour) heroNote = `Comparé à la même date en ${S.y - 1} (1er janvier → ${dayLbl()} ${S.y - 1}).`;
+    if (st.jour) heroNote = '';
     else if (st.cur != null) heroNote = `${MOIS[C.tm - 1]} en cours : <b class="num">${eur(st.cur)}</b> (non compté dans « à date »)`;
   } else {
     heroLbl = perLabel + (st.partial ? ' · mois en cours' : '');
-    if (st.partial) heroNote = st.jour ? `Comparé à la même date en ${S.y - 1} (jusqu\u2019au ${dayLbl()}).` : `Comparaison avec les mêmes mois de ${S.y - 1}. ${MOIS[C.tm - 1]} n'est pas terminé.`;
+    if (st.partial) heroNote = st.jour ? '' : `Comparaison avec les mêmes mois de ${S.y - 1}. ${MOIS[C.tm - 1]} n'est pas terminé.`;
     if (st.none) heroNote = 'Période pas encore commencée.';
   }
   let objHTML = '';
@@ -401,6 +404,7 @@ function render() {
     <div class="lbl">${esc(heroLbl)}</div>
     <div class="big">${st.v == null ? '–' : eur(st.v)}</div>
     <div class="cmp">${evPill(st.ev)}<span>${st.jour ? 'Même date ' + (S.y - 1) : S.y - 1} : <b class="num">${eur(st.v1)}</b></span></div>
+    ${st.v != null && st.v1 ? `<div class="diff ${st.v - st.v1 >= 0 ? 'up' : 'down'}">${st.v - st.v1 >= 0 ? '+' : '−'} ${eur(Math.abs(st.v - st.v1))} <span>${st.v - st.v1 >= 0 ? 'de plus' : 'de moins'} qu\u2019en ${S.y - 1}</span></div>` : ''}
     ${heroNote ? `<p class="note">${heroNote}</p>` : ''}
     ${objHTML}
   </section>
