@@ -15,7 +15,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script>window.APP_VERSION = '09/11 08:05';</script>
+<script>window.APP_VERSION = '09/11 09:49';</script>
 <style>
 /* Suivi CA : une colonne mobile. Barre du haut (fraîcheur des données), réglages (mesure, période, périmètre),
    chiffre principal, graphique 12 mois N / N-1 / objectif, détail par dépôt, enseigne et magasin. */
@@ -209,7 +209,7 @@ function parseModel(wb) {
   const rows = n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: null, blankrows: true });
   const num = v => typeof v === 'number' ? v : (v == null || v === '' ? 0 : (+String(v).replace(',', '.') || 0));
   const str = v => v == null ? '' : String(v).trim();
-  const live = {}, hist = {}, anc = {}, jourAvail = {}; let jours = false;
+  const live = {}, hist = {}, anc = {}, jourAvail = {}; let jours = false, prevu = false;
   const d = rows('Données');
   for (let i = 1; i < d.length; i++) {
     const r = d[i]; if (!r || !r[0]) continue;
@@ -217,6 +217,7 @@ function parseModel(wb) {
     const o = live[k] || (live[k] = { n: 0, ht: 0, ttc: 0 });
     o.n++; o.ht += num(r[4]); o.ttc += num(r[5]);
     if (str(r[0]) === 'CA_J') jours = true;
+    if (str(r[0]) === 'PREVU') prevu = true;
     if (/_JOUR$/.test(str(r[0]))) jourAvail[str(r[0]).replace('_JOUR', '') + '|' + num(r[2]) + '|' + num(r[3])] = true;
   }
   const stamp = excelDate(d[1] && d[1][8]);
@@ -247,7 +248,7 @@ function parseModel(wb) {
   if (!depots.length) throw new Error('onglet Dépôts illisible');
   const mags = depots.flatMap(x => x.mags);
   const ensOf = m => ens.find(e => m.startsWith(e)) || '';
-  return { live, hist, anc, obj, clo, depots, ens, mags, ensOf, stamp, jourAvail, jours };
+  return { live, hist, anc, obj, clo, depots, ens, mags, ensOf, stamp, jourAvail, jours, prevu };
 }
 function makeCalc(M, today) {
   today = today || new Date();
@@ -278,7 +279,9 @@ function makeCalc(M, today) {
     let s = 0; for (const g of mags) { const l = M.live[t + '_JOUR|' + g + '|' + (ty - 1) + '|' + tm]; if (l) s += t === 'FACT' ? l.ht : l.ttc; }
     return s;
   };
-  return { val, months, objM, closed, yearTotal, objFinal, aDate, jourN1, ty, tm, fut };
+  // Livraisons planifiées non encore validées (lignes PREVU), par mois
+  const prevuM = (mags, y) => { const a = [null]; for (let m = 1; m <= 12; m++) { let s = 0; for (const g of mags) { const l = M.live['PREVU|' + g + '|' + y + '|' + m]; if (l) s += l.ht; } a.push(s); } return a; };
+  return { val, months, objM, closed, yearTotal, objFinal, aDate, jourN1, prevuM, ty, tm, fut };
 }
 /*ENDCALC*/
 
@@ -327,7 +330,28 @@ function stats(mags) {
     if (isF) res.objP = periodMonths().reduce((a, m) => a + ob[m], 0);
   }
   res.ev = res.v != null && res.v1 ? res.v / res.v1 - 1 : null;
+  // Prévision (facturé) : fait à ce jour + livraisons déjà planifiées jusqu'à la fin de la période
+  const pm = periodMonths();
+  if (isF && M.prevu && y === C.ty && pm.some(m => m >= C.tm)) {
+    const pv = C.prevuM(mags, y);
+    res.pv = pm.reduce((a, m) => a + (pv[m] || 0), 0);
+    res.fait = pm.reduce((a, m) => a + (n[m] || 0), 0);
+    res.proj = res.fait + res.pv;
+    res.projObj = pm.reduce((a, m) => a + (ob[m] || 0), 0);
+    res.projN1 = S.mode === 'annee' ? res.tot1 : pm.reduce((a, m) => a + (n1[m] || 0), 0);
+  }
   return res;
+}
+function prevHTML(st) {
+  if (st.pv == null) return '';
+  const fin = S.mode === 'mois' ? 'fin ' + MOIS[S.m - 1].toLowerCase() : S.mode === 'trim' ? 'fin T' + S.q : 'fin ' + S.y;
+  const d1 = st.projN1 ? st.proj - st.projN1 : null, po = st.projObj ? st.proj / st.projObj : null;
+  return `<div class="obj">
+    <div class="objline"><span>Fait à ce jour</span><b>${eur(st.fait)}</b></div>
+    <div class="objline"><span>+ Déjà prévu (livraisons planifiées)</span><b>${eur(st.pv)}</b></div>
+    <div class="objline" style="font-size:16px"><span><b>= Projection ${esc(fin)}</b></span><b>${eur(st.proj)}</b></div>
+    <div class="cmp">${po != null ? `<span>Objectif : <b class="num">${pct0(po)}</b></span>` : ''}${d1 != null ? `<span class="${d1 >= 0 ? 'diff up' : 'diff down'}" style="font-size:14px">${d1 >= 0 ? '+' : '−'} ${eur(Math.abs(d1))} <span>vs ${S.y - 1} complet</span></span>` : ''}</div>
+    <p class="note">« Prévu » = BL planifiés pas encore validés, à partir d\u2019aujourd\u2019hui.</p></div>`;
 }
 const evPill = ev => ev == null ? '<span class="pill flat">–</span>' : `<span class="pill ${ev > 0.0005 ? 'up' : ev < -0.0005 ? 'down' : 'flat'}">${ev > 0.0005 ? '▲' : ev < -0.0005 ? '▼' : '='} ${pct(ev).replace('+', '')}</span>`;
 
@@ -409,6 +433,7 @@ function render() {
     <div class="cmp">${evPill(st.ev)}<span>${st.jour ? 'Même date ' + (S.y - 1) : S.y - 1} : <b class="num">${eur(st.v1)}</b></span></div>
     ${st.v != null && st.v1 ? `<div class="diff ${st.v - st.v1 >= 0 ? 'up' : 'down'}">${st.v - st.v1 >= 0 ? '+' : '−'} ${eur(Math.abs(st.v - st.v1))} <span>${st.v - st.v1 >= 0 ? 'de plus' : 'de moins'} qu\u2019en ${S.y - 1}</span></div>` : ''}
     ${heroNote ? `<p class="note">${heroNote}</p>` : ''}
+    ${prevHTML(st)}
     ${objHTML}
   </section>
   <section class="panel">
