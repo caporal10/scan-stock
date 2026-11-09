@@ -15,7 +15,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script>window.APP_VERSION = '09/11 09:56';</script>
+<script>window.APP_VERSION = '09/11 11:30';</script>
 <style>
 /* Suivi CA : une colonne mobile. Barre du haut (fraîcheur des données), réglages (mesure, période, périmètre),
    chiffre principal, graphique 12 mois N / N-1 / objectif, détail par dépôt, enseigne et magasin. */
@@ -337,7 +337,7 @@ function stats(mags) {
     res.pv = pm.reduce((a, m) => a + (pv[m] || 0), 0);
     res.fait = pm.reduce((a, m) => a + (n[m] || 0), 0);
     res.proj = res.fait + res.pv;
-    res.projObj = pm.reduce((a, m) => a + (ob[m] || 0), 0);
+    res.projObj = pm.reduce((a, m) => a + (C.closed(y, m) ? (n[m] || 0) : (ob[m] || 0)), 0);   // objectif final de la période
     res.projN1 = S.mode === 'annee' ? res.tot1 : pm.reduce((a, m) => a + (n1[m] || 0), 0);
   }
   return res;
@@ -350,7 +350,7 @@ function prevHTML(st) {
     <div class="objline"><span>Fait à ce jour</span><b>${eur(st.fait)}</b></div>
     <div class="objline"><span>+ Déjà prévu (livraisons planifiées)</span><b>${eur(st.pv)}</b></div>
     <div class="objline" style="font-size:16px"><span><b>= Projection ${esc(fin)}</b></span><b>${eur(st.proj)}</b></div>
-    <div class="cmp">${po != null ? `<span>Objectif : <b class="num">${pct0(po)}</b></span>` : ''}${d1 != null ? `<span class="${d1 >= 0 ? 'diff up' : 'diff down'}" style="font-size:14px">${d1 >= 0 ? '+' : '−'} ${eur(Math.abs(d1))} <span>${d1 >= 0 ? 'au-dessus de' : 'sous'} l\u2019objectif</span></span>` : ''}</div>
+    <div class="cmp">${po != null ? `<span>Objectif final : <b class="num">${pct0(po)}</b></span>` : ''}${d1 != null ? `<span class="${d1 >= 0 ? 'diff up' : 'diff down'}" style="font-size:14px">${d1 >= 0 ? '+' : '−'} ${eur(Math.abs(d1))} <span>${d1 >= 0 ? 'au-dessus de' : 'sous'} l\u2019objectif final</span></span>` : ''}</div>
     <p class="note">« Prévu » = BL planifiés pas encore validés, à partir d\u2019aujourd\u2019hui.</p></div>`;
 }
 const evPill = ev => ev == null ? '<span class="pill flat">–</span>' : `<span class="pill ${ev > 0.0005 ? 'up' : ev < -0.0005 ? 'down' : 'flat'}">${ev > 0.0005 ? '▲' : ev < -0.0005 ? '▼' : '='} ${pct(ev).replace('+', '')}</span>`;
@@ -402,7 +402,7 @@ function render() {
           <div class="kpi"><span>Réalisé ${S.y}</span><b>${eur(st.tot)}</b></div>
           <div class="kpi"><span>Objectif ${S.y}</span><b>${eur(st.objY)}</b></div>
           <div class="kpi" style="grid-column:1/-1"><span>Objectif final</span><b>${eur(st.objF)}</b></div>
-          ${S.y === C.ty ? `<div class="kpi" style="grid-column:1/-1"><span>Reste à facturer pour l\u2019objectif final</span><b style="color:${st.objF - st.tot > 0 ? 'var(--bad)' : 'var(--ok)'}">${st.objF - st.tot > 0 ? eur(st.objF - st.tot) : 'Atteint (+' + eur(st.tot - st.objF) + ')'}</b></div>` : ''}
+          ${S.y === C.ty ? `<div class="kpi" style="grid-column:1/-1"><span>Reste à facturer pour l\u2019objectif final</span><b style="color:${st.objF - st.tot > 0 ? 'var(--bad)' : 'var(--ok)'}">${st.objF - st.tot > 0 ? eur(st.objF - st.tot) : 'Atteint (+' + eur(st.tot - st.objF) + ')'}</b>${st.pv != null && st.objF - st.tot > 0 ? `<span style="margin-top:4px">dont déjà planifié : ${eur(st.pv)} · reste à trouver : <b style="font-size:14px;color:var(--bad)">${eur(Math.max(0, st.objF - st.tot - st.pv))}</b></span>` : ''}</div>` : ''}
         </div>
         <p class="note">Objectif final = réalisé des mois clôturés + objectifs des autres mois.</p></div>`;
     } else {
