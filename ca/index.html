@@ -15,7 +15,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script>window.APP_VERSION = '09/11 12:29';</script>
+<script>window.APP_VERSION = '09/11 18:28';</script>
 <style>
 /* Suivi CA : une colonne mobile. Barre du haut (fraîcheur des données), réglages (mesure, période, périmètre),
    chiffre principal, graphique 12 mois N / N-1 / objectif, détail par dépôt, enseigne et magasin. */
@@ -334,8 +334,8 @@ function stats(mags) {
   res.ev = res.v != null && res.v1 ? res.v / res.v1 - 1 : null;
   // Prévision (facturé) : fait à ce jour + livraisons déjà planifiées jusqu'à la fin de la période
   const pm = periodMonths();
-  if (isF && M.prevu && y === C.ty && pm.some(m => m >= C.tm)) {
-    const pv = C.prevuM(mags, y);
+  const pv = isF && M.prevu && y === C.ty ? C.prevuM(mags, y) : null;
+  if (pv && (pm.some(m => m >= C.tm) || pm.some(m => pv[m]))) {
     res.pv = pm.reduce((a, m) => a + (pv[m] || 0), 0);
     res.fait = pm.reduce((a, m) => a + (n[m] || 0), 0);
     res.proj = res.fait + res.pv;
@@ -353,7 +353,7 @@ function prevHTML(st) {
     <div class="objline"><span>+ Déjà prévu (livraisons planifiées)</span><b>${eur(st.pv)}</b></div>
     <div class="objline" style="font-size:16px"><span><b>= Projection ${esc(fin)}</b></span><b>${eur(st.proj)}</b></div>
     <div class="cmp">${po != null ? `<span>Objectif final : <b class="num">${pct0(po)}</b></span>` : ''}${d1 != null ? `<span class="${d1 >= 0 ? 'diff up' : 'diff down'}" style="font-size:14px">${d1 >= 0 ? '+' : '−'} ${eur(Math.abs(d1))} <span>${d1 >= 0 ? 'au-dessus de' : 'sous'} l\u2019objectif final</span></span>` : ''}</div>
-    <p class="note">« Prévu » = BL planifiés pas encore validés, à partir d\u2019aujourd\u2019hui.</p></div>`;
+    <p class="note">« Prévu » = BL pas encore validés de la période, y compris ceux d\u2019avant aujourd\u2019hui pas encore validés.</p></div>`;
 }
 const evPill = ev => ev == null ? '<span class="pill flat">–</span>' : `<span class="pill ${ev > 0.0005 ? 'up' : ev < -0.0005 ? 'down' : 'flat'}">${ev > 0.0005 ? '▲' : ev < -0.0005 ? '▼' : '='} ${pct(ev).replace('+', '')}</span>`;
 
@@ -708,7 +708,7 @@ function openExport() {
       <div class="seg" id="ex-per">${opts.map(([k, p], i) => `<button data-per="${k}" aria-pressed="${(S.mode === k) || (S.mode === 'jour' && i === 0) ? 'true' : 'false'}">${esc(p.label)}</button>`).join('')}</div>
       <h3 style="margin-top:6px">Format</h3>
       <div class="row"><button class="btn primary" id="ex-img">Image (à envoyer)</button><button class="btn" id="ex-xls">Fichier Excel</button></div>
-      <p class="hint">Facturé HT. Pôle, dépôts, enseignes puis magasins. Objectif final = facturé réel des mois clôturés + objectifs des autres mois. « Déjà prévu » = BL planifiés pas encore validés.</p>
+      <p class="hint">Facturé HT. Pôle, dépôts, enseignes puis magasins. Objectif final = facturé réel des mois clôturés + objectifs des autres mois. « Déjà prévu » = BL pas encore validés, y compris ceux en retard de validation.</p>
     </div>`;
   $('#sheet').hidden = false;
   if (!document.querySelector('#ex-per [aria-pressed="true"]')) document.querySelector('#ex-per button:last-child').setAttribute('aria-pressed', 'true');
