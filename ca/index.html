@@ -15,7 +15,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script>window.APP_VERSION = '09/11 11:30';</script>
+<script>window.APP_VERSION = '09/11 11:35';</script>
 <style>
 /* Suivi CA : une colonne mobile. Barre du haut (fraîcheur des données), réglages (mesure, période, périmètre),
    chiffre principal, graphique 12 mois N / N-1 / objectif, détail par dépôt, enseigne et magasin. */
@@ -309,7 +309,9 @@ function periodMonths() {
 function sumM(arr, ms) { let s = 0, any = false; for (const m of ms) if (arr[m] != null) { s += arr[m]; any = true; } return any ? s : null; }
 function stats(mags) {
   const y = S.y, isF = S.t === 'FACT';
-  const n = C.months(S.t, mags, y), n1 = C.months(S.t, mags, y - 1), ob = isF ? C.objM(mags, y) : null;
+  const n = C.months(S.t, mags, y), n1 = C.months(S.t, mags, y - 1);
+  // Objectif final de chaque mois : mois clôturé = facturé réel, sinon objectif (l'objectif d'origine n'est plus utilisé)
+  const ob0 = isF ? C.objM(mags, y) : null, ob = isF ? ob0.map((o, m) => m === 0 ? null : (C.closed(y, m) ? (n[m] || 0) : o)) : null;
   const res = { n, n1, ob };
   const j1 = y === C.ty ? C.jourN1(S.t, mags) : null;   // N-1 du mois en cours jusqu'au même jour
   res.j1 = j1;
@@ -320,7 +322,7 @@ function stats(mags) {
     if (j1 != null) { res.jour = true; res.v = (res.v || 0) + (n[C.tm] || 0); res.v1 = (res.v1 || 0) + j1; }
     res.tot = C.yearTotal(S.t, mags, y); res.tot1 = C.yearTotal(S.t, mags, y - 1);
     res.cur = (y === C.ty && n[C.tm] != null) ? n[C.tm] : null;
-    if (isF) { res.objY = ob.slice(1).reduce((a, b) => a + b, 0); res.objF = C.objFinal(mags, y); }
+    if (isF) { res.objF = C.objFinal(mags, y); res.objY = res.objF; }
     if (!k && !res.jour) { res.v = res.tot; res.v1 = res.tot1; }
   } else {
     const ms = periodMonths().filter(m => !C.fut(y, m));
@@ -337,7 +339,7 @@ function stats(mags) {
     res.pv = pm.reduce((a, m) => a + (pv[m] || 0), 0);
     res.fait = pm.reduce((a, m) => a + (n[m] || 0), 0);
     res.proj = res.fait + res.pv;
-    res.projObj = pm.reduce((a, m) => a + (C.closed(y, m) ? (n[m] || 0) : (ob[m] || 0)), 0);   // objectif final de la période
+    res.projObj = pm.reduce((a, m) => a + (ob[m] || 0), 0);   // objectif final de la période
     res.projN1 = S.mode === 'annee' ? res.tot1 : pm.reduce((a, m) => a + (n1[m] || 0), 0);
   }
   return res;
@@ -396,19 +398,18 @@ function render() {
     if (S.mode === 'annee') {
       const p = st.objY ? st.tot / st.objY : null;
       objHTML = `<div class="obj">
-        <div class="objline"><span>Réalisé ${S.y} / objectif année</span><b>${pct0(p)}</b></div>
+        <div class="objline"><span>Réalisé ${S.y} / objectif final</span><b>${pct0(p)}</b></div>
         <div class="bar"><i style="width:${Math.min(100, (p || 0) * 100)}%"></i></div>
         <div class="kpis">
           <div class="kpi"><span>Réalisé ${S.y}</span><b>${eur(st.tot)}</b></div>
-          <div class="kpi"><span>Objectif ${S.y}</span><b>${eur(st.objY)}</b></div>
-          <div class="kpi" style="grid-column:1/-1"><span>Objectif final</span><b>${eur(st.objF)}</b></div>
+          <div class="kpi"><span>Objectif final ${S.y}</span><b>${eur(st.objF)}</b></div>
           ${S.y === C.ty ? `<div class="kpi" style="grid-column:1/-1"><span>Reste à facturer pour l\u2019objectif final</span><b style="color:${st.objF - st.tot > 0 ? 'var(--bad)' : 'var(--ok)'}">${st.objF - st.tot > 0 ? eur(st.objF - st.tot) : 'Atteint (+' + eur(st.tot - st.objF) + ')'}</b>${st.pv != null && st.objF - st.tot > 0 ? `<span style="margin-top:4px">dont déjà planifié : ${eur(st.pv)} · reste à trouver : <b style="font-size:14px;color:var(--bad)">${eur(Math.max(0, st.objF - st.tot - st.pv))}</b></span>` : ''}</div>` : ''}
         </div>
         <p class="note">Objectif final = réalisé des mois clôturés + objectifs des autres mois.</p></div>`;
     } else {
       const p = st.objP && st.v != null ? st.v / st.objP : null;
       objHTML = `<div class="obj">
-        <div class="objline"><span>Objectif ${perLabel} : <b>${eur(st.objP)}</b></span><b>${pct0(p)}</b></div>
+        <div class="objline"><span>Objectif final ${perLabel} : <b>${eur(st.objP)}</b></span><b>${pct0(p)}</b></div>
         <div class="bar"><i style="width:${Math.min(100, (p || 0) * 100)}%"></i></div>
         ${st.objP && st.v != null ? `<div class="objline"><span>Reste à faire</span><b>${eur(Math.max(0, st.objP - st.v))}</b></div>` : ''}</div>`;
     }
@@ -437,7 +438,7 @@ function render() {
   </section>
   <section class="panel">
     <div class="sectitle"><h3>Mois par mois</h3></div>
-    <div class="legend"><span><i style="background:var(--s-n)"></i>${S.y}</span><span><i style="background:var(--s-n1)"></i>${S.y - 1}</span>${isF ? '<span><i class="tick" style="background:var(--s-obj)"></i>Objectif</span>' : ''}</div>
+    <div class="legend"><span><i style="background:var(--s-n)"></i>${S.y}</span><span><i style="background:var(--s-n1)"></i>${S.y - 1}</span>${isF ? '<span><i class="tick" style="background:var(--s-obj)"></i>Objectif final</span>' : ''}</div>
     <div class="chart" id="chart"></div>
     <p class="hint">Touchez un mois pour voir ses chiffres.</p>
   </section>
@@ -534,7 +535,7 @@ function tableHTML(st) {
     rows += `<tr><td>${MOIS[m - 1]}</td><td>${eur(n)}</td><td>${eur(n1)}</td><td>${pct(ev)}</td>${isF ? `<td>${eur(st.ob[m])}</td><td>${C.closed(S.y, m) ? 'Oui' : 'Non'}</td>` : ''}</tr>`;
   }
   return `<details class="tbl"><summary>Tableau des 12 mois</summary><div class="tblwrap"><table>
-    <thead><tr><th>Mois</th><th>${S.y}</th><th>${S.y - 1}</th><th>Évol.</th>${isF ? '<th>Objectif</th><th>Clôturé</th>' : ''}</tr></thead><tbody>${rows}</tbody></table></div></details>`;
+    <thead><tr><th>Mois</th><th>${S.y}</th><th>${S.y - 1}</th><th>Évol.</th>${isF ? '<th>Obj. final</th><th>Clôturé</th>' : ''}</tr></thead><tbody>${rows}</tbody></table></div></details>`;
 }
 function drawChart(st) {
   const el = $('#chart'), isF = S.t === 'FACT';
@@ -559,7 +560,7 @@ function drawChart(st) {
   const tip = el.querySelector('.tip');
   const show = m => {
     const n = st.n[m], n1 = st.n1[m];
-    tip.innerHTML = `<b>${MOIS[m - 1]}</b><div class="r"><span>${S.y}</span><span>${eur(n)}</span></div><div class="r"><span>${S.y - 1}</span><span>${eur(n1)}</span></div>${n != null && n1 ? `<div class="r"><span>Évol.</span><span>${pct(n / n1 - 1)}</span></div>` : ''}${isF && st.ob[m] ? `<div class="r"><span>Objectif</span><span>${eur(st.ob[m])}</span></div>` : ''}`;
+    tip.innerHTML = `<b>${MOIS[m - 1]}</b><div class="r"><span>${S.y}</span><span>${eur(n)}</span></div><div class="r"><span>${S.y - 1}</span><span>${eur(n1)}</span></div>${n != null && n1 ? `<div class="r"><span>Évol.</span><span>${pct(n / n1 - 1)}</span></div>` : ''}${isF && st.ob[m] ? `<div class="r"><span>Obj. final</span><span>${eur(st.ob[m])}</span></div>` : ''}`;
     tip.hidden = false;
     const box = el.getBoundingClientRect(), sx = box.width / W;
     let x = (L + cw * (m - 0.5)) * sx; x = Math.max(85, Math.min(box.width - 85, x));
