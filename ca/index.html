@@ -15,7 +15,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script>window.APP_VERSION = '09/11 11:35';</script>
+<script>window.APP_VERSION = '09/11 12:29';</script>
 <style>
 /* Suivi CA : une colonne mobile. Barre du haut (fraîcheur des données), réglages (mesure, période, périmètre),
    chiffre principal, graphique 12 mois N / N-1 / objectif, détail par dépôt, enseigne et magasin. */
@@ -425,6 +425,7 @@ function render() {
     </div>
     ${sub}
     <div class="scroller" id="sc-scope">${chips.join('')}</div>
+    ${isF ? '<button class="btn" id="btn-export"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Exporter le tableau fait / objectif / prévu</button>' : ''}
   </section>
   <section class="panel hero">
     <h3>${esc(scopeName(S.scope))} · ${isF ? 'Facturé HT' : 'Prise de commande TTC'}</h3>
@@ -582,6 +583,7 @@ function bind() {
   document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { S.d = +b.dataset.d; render(); });
   document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { S.q = +b.dataset.q; render(); });
   document.querySelectorAll('[data-sc]').forEach(b => b.onclick = () => { S.scope = b.dataset.sc; saveUI(); render(); if (b.classList.contains('item')) window.scrollTo({ top: 0, behavior: 'smooth' }); });
+  if ($('#btn-export')) $('#btn-export').onclick = openExport;
   if ($('#yr')) $('#yr').onchange = e => { S.y = +e.target.value; render(); };
   const ch = document.querySelector('#sc-scope [aria-pressed="true"]'); if (ch) ch.scrollIntoView({ block: 'nearest', inline: 'center' });
   const cd = document.querySelector('#sc-d [aria-pressed="true"]'); if (cd) cd.scrollIntoView({ block: 'nearest', inline: 'center' });
@@ -676,6 +678,98 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 $('#btn-refresh').onclick = () => odRefresh({ interactive: true });
 $('#btn-set').onclick = openSettings;
 document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => { S.t = b.dataset.tab; saveUI(); render(); window.scrollTo(0, 0); });
+// ---------- Export : fait / objectif final / reste / prévu, par pôle, dépôt, enseigne, magasin ----------
+function exportRows(months) {
+  const y = S.y, withPv = !!M.prevu && y === C.ty;
+  const calc = mags => {
+    const n = C.months('FACT', mags, y), ob0 = C.objM(mags, y), pv = withPv ? C.prevuM(mags, y) : null;
+    let fait = 0, obj = 0, prev = 0;
+    for (const m of months) { fait += n[m] || 0; obj += C.closed(y, m) ? (n[m] || 0) : (ob0[m] || 0); if (pv) prev += pv[m] || 0; }
+    fait = Math.round(fait); obj = Math.round(obj); prev = Math.round(prev);   // arrondis d'abord : les colonnes s'additionnent juste
+    return { fait, obj, reste: obj - fait, prev: withPv ? prev : null, apres: withPv ? obj - fait - prev : null };
+  };
+  const rows = [{ g: 'Pôle', name: 'Total pôle', ...calc(M.mags) }];
+  M.depots.forEach(d => rows.push({ g: 'Dépôt', name: d.name, ...calc(d.mags) }));
+  M.ens.forEach(e => rows.push({ g: 'Enseigne', name: e, ...calc(M.mags.filter(x => M.ensOf(x) === e)) }));
+  M.mags.forEach(g => rows.push({ g: 'Magasin', name: g, ...calc([g]) }));
+  return { rows, withPv };
+}
+const EXP_COLS = ['Fait', 'Objectif final', 'Reste à faire', 'Déjà prévu', 'Reste après prévu'];
+function exportPeriod(kind) {
+  const y = S.y, m = S.y === C.ty ? C.tm : (S.m || 12), q = Math.ceil(m / 3);
+  if (kind === 'mois') return { label: MOIS[m - 1] + ' ' + y, file: MOIS[m - 1].toLowerCase() + '-' + y, months: [m] };
+  if (kind === 'trim') return { label: 'T' + q + ' ' + y, file: 'T' + q + '-' + y, months: [3 * q - 2, 3 * q - 1, 3 * q] };
+  return { label: 'Année ' + y, file: y + '', months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] };
+}
+function openExport() {
+  const opts = ['mois', 'trim', 'annee'].map(k => [k, exportPeriod(k)]);
+  $('#sheet-in').innerHTML = `<div class="sheet-head"><h2>Exporter</h2><button class="iconbtn" id="sh-x" aria-label="Fermer">✕</button></div>
+    <div class="panel"><h3>Période</h3>
+      <div class="seg" id="ex-per">${opts.map(([k, p], i) => `<button data-per="${k}" aria-pressed="${(S.mode === k) || (S.mode === 'jour' && i === 0) ? 'true' : 'false'}">${esc(p.label)}</button>`).join('')}</div>
+      <h3 style="margin-top:6px">Format</h3>
+      <div class="row"><button class="btn primary" id="ex-img">Image (à envoyer)</button><button class="btn" id="ex-xls">Fichier Excel</button></div>
+      <p class="hint">Facturé HT. Pôle, dépôts, enseignes puis magasins. Objectif final = facturé réel des mois clôturés + objectifs des autres mois. « Déjà prévu » = BL planifiés pas encore validés.</p>
+    </div>`;
+  $('#sheet').hidden = false;
+  if (!document.querySelector('#ex-per [aria-pressed="true"]')) document.querySelector('#ex-per button:last-child').setAttribute('aria-pressed', 'true');
+  document.querySelectorAll('#ex-per button').forEach(b => b.onclick = () => document.querySelectorAll('#ex-per button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false')));
+  const per = () => exportPeriod(document.querySelector('#ex-per [aria-pressed="true"]').dataset.per);
+  $('#sh-x').onclick = closeSheet;
+  $('#ex-xls').onclick = () => exportXlsx(per());
+  $('#ex-img').onclick = () => exportImg(per());
+}
+async function shareFile(blob, name) {
+  const file = new File([blob], name, { type: blob.type });
+  try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+}
+function exportXlsx(p) {
+  const { rows, withPv } = exportRows(p.months);
+  const cols = withPv ? EXP_COLS : EXP_COLS.slice(0, 3);
+  const aoa = [['Facturé HT · ' + p.label + (M.stamp ? ' · données du ' + fmtDT(M.stamp) : '')], [], ['Niveau', 'Nom', ...cols]];
+  rows.forEach(r => aoa.push([r.g, r.name, r.fait, r.obj, r.reste, ...(withPv ? [r.prev, r.apres] : [])]));
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 10 }, { wch: 24 }, ...cols.map(() => ({ wch: 16 }))];
+  for (let r = 3; r < aoa.length; r++) for (let c = 2; c < 2 + cols.length; c++) { const ref = XLSX.utils.encode_cell({ r, c }); if (ws[ref]) { ws[ref].z = '#,##0 €'; ws[ref].v = Math.round(ws[ref].v); } }
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Facturé');
+  const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  shareFile(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'Facture-' + p.file + '.xlsx');
+}
+function exportImg(p) {
+  const { rows, withPv } = exportRows(p.months);
+  const cols = withPv ? EXP_COLS : EXP_COLS.slice(0, 3);
+  const sc = 2, W = 210 + cols.length * 128, rh = 30, top = 74, H = top + rh * (rows.length + 1) + 48 + 3 * 8;
+  const cv = document.createElement('canvas'); cv.width = W * sc; cv.height = H * sc;
+  const x = cv.getContext('2d'); x.scale(sc, sc);
+  const font = (w, sz) => `${w} ${sz}px "IBM Plex Sans", system-ui, -apple-system, sans-serif`;
+  x.fillStyle = '#ffffff'; x.fillRect(0, 0, W, H);
+  x.fillStyle = '#16201c'; x.font = font(700, 20); x.fillText('Facturé HT · ' + p.label, 16, 32);
+  x.fillStyle = '#5d6a64'; x.font = font(400, 12); x.fillText((M.stamp ? 'Données du ' + fmtDT(M.stamp) + ' · ' : '') + 'objectif final = réalisé des mois clôturés + objectifs des autres mois', 16, 54);
+  let yy = top;
+  x.fillStyle = '#0f5e57'; x.fillRect(8, yy, W - 16, rh);
+  x.fillStyle = '#ffffff'; x.font = font(600, 12.5);
+  x.fillText('', 16, yy + 20);
+  cols.forEach((c, i) => { x.textAlign = 'right'; x.fillText(c, 210 + (i + 1) * 128 - 12, yy + 20); });
+  x.textAlign = 'left'; yy += rh;
+  let prevG = null;
+  rows.forEach((r, i) => {
+    if (prevG && r.g !== prevG) yy += 8;
+    prevG = r.g;
+    const bold = r.g !== 'Magasin';
+    x.fillStyle = r.g === 'Pôle' ? '#c9dcd6' : r.g === 'Magasin' ? (i % 2 ? '#f6f8f6' : '#ffffff') : '#e8f0ed';
+    x.fillRect(8, yy, W - 16, rh);
+    x.fillStyle = '#16201c'; x.font = font(bold ? 700 : 400, 13); x.textAlign = 'left'; x.fillText(r.name, 16, yy + 20);
+    const vals = [r.fait, r.obj, r.reste, ...(withPv ? [r.prev, r.apres] : [])];
+    vals.forEach((v, k) => {
+      const isR = k === 2 || k === 4;
+      x.fillStyle = isR ? (v > 0 ? '#b42318' : '#1d7a46') : '#16201c';
+      x.font = font(bold || isR ? 700 : 400, 13); x.textAlign = 'right';
+      x.fillText(isR && v <= 0 ? 'atteint' + (v < 0 ? ' +' + eur(-v) : '') : eur(v), 210 + (k + 1) * 128 - 12, yy + 20);
+    });
+    yy += rh;
+  });
+  cv.toBlob(b => shareFile(b, 'Facture-' + p.file + '.png'), 'image/png');
+}
 function closeSheet() { $('#sheet').hidden = true; }
 $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
 function openSettings() {
