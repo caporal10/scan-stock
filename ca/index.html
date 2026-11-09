@@ -15,7 +15,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script>window.APP_VERSION = '09/11 09:55';</script>
+<script>window.APP_VERSION = '09/11 09:56';</script>
 <style>
 /* Suivi CA : une colonne mobile. Barre du haut (fraîcheur des données), réglages (mesure, période, périmètre),
    chiffre principal, graphique 12 mois N / N-1 / objectif, détail par dépôt, enseigne et magasin. */
@@ -573,7 +573,10 @@ function drawChart(st) {
 }
 function niceStep(x) { const p = Math.pow(10, Math.floor(Math.log10(x))), f = x / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p; }
 function bind() {
-  document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { S.mode = b.dataset.mode; saveUI(); render(); });
+  document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
+    S.mode = b.dataset.mode;
+    if (S.y === C.ty) { S.m = C.tm; S.q = Math.ceil(C.tm / 3); }   // revient sur le mois / trimestre en cours
+    saveUI(); render(); });
   document.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { S.m = +b.dataset.m; render(); });
   document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { S.d = +b.dataset.d; render(); });
   document.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { S.q = +b.dataset.q; render(); });
@@ -610,7 +613,8 @@ function loadBuffer(buf, meta) {
   const model = parseModel(wb);
   M = model; C = makeCalc(M);
   if (!S.y || S.y > C.ty) S.y = C.ty;
-  if (!S.m) S.m = Math.max(1, C.tm - 1 || 1);
+  if (!S.m || S.y === C.ty) S.m = C.tm;
+  if (S.y === C.ty) S.q = Math.ceil(C.tm / 3);
   if (!S.q) S.q = Math.ceil(C.tm / 3);
   idbSet('wb', { buf, meta: meta || {} });
   setStatus(); render();
