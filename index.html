@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '06/11 18:28';</script>
+<script>window.APP_VERSION = '12/11 11:59';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -1240,11 +1240,11 @@ async function odRefresh({ force = false, interactive = false, quiet = false } =
   od.busy = true; setBusy(true);
   try {
     const tk = await odToken(interactive);
-    if (!tk) { if (!quiet) toast('Connexion OneDrive expirée : touchez Actualiser pour vous reconnecter.'); return; }
+    if (!tk) { if (!quiet) toast('Connexion OneDrive expirée : touchez Actualiser pour vous reconnecter.'); return false; }
     const meta = await graph(`/drives/${encodeURIComponent(od.link.driveId)}/items/${encodeURIComponent(od.link.id)}`, tk);
     od.lastCheck = Date.now();
     const mod = Date.parse(meta.lastModifiedDateTime);
-    if (!force && D && D.meta.source === 'onedrive' && D.meta.odModified === mod) { if (!quiet) toast('Déjà à jour (fichier du ' + fmtDT(mod) + ')'); return; }
+    if (!force && D && D.meta.source === 'onedrive' && D.meta.odModified === mod) { if (!quiet) toast('Déjà à jour (fichier du ' + fmtDT(mod) + ')'); return true; }
     const url = meta['@microsoft.graph.downloadUrl'];
     const buf = await (url ? fetch(url) : fetch(`https://graph.microsoft.com/v1.0/drives/${encodeURIComponent(od.link.driveId)}/items/${encodeURIComponent(od.link.id)}/content`, { headers: { Authorization: 'Bearer ' + tk } })).then(r => { if (!r.ok) throw new Error('téléchargement ' + r.status); return r.arrayBuffer(); });
     const p = parseWorkbook(new Uint8Array(buf));
@@ -1252,11 +1252,29 @@ async function odRefresh({ force = false, interactive = false, quiet = false } =
     D = buildIndex(data); await idb.set('data', { header: data.header, rows: data.rows, meta: data.meta });
     afterData(); refreshFiche();
     if (!quiet) toast('Données actualisées : fichier du ' + fmtDT(freshness().when));
-  } catch (e) { if (!quiet) toast('Actualisation impossible : ' + (e.message || e)); }
+    return true;
+  } catch (e) { if (!quiet) toast('Actualisation impossible : ' + (e.message || e)); return false; }
   finally { od.busy = false; setBusy(false); }
 }
 function autoRefresh() { if (od.link && od.account && Date.now() - od.lastCheck > 5 * 60000) odRefresh({ quiet: true }); }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && od.link && Date.now() - od.lastCheck > 2 * 60000) odRefresh({ quiet: true }); });
+// Actualisation à l'ouverture / au retour dans l'appli. Sur iPhone, au réveil de l'appli le réseau n'est pas
+// toujours prêt tout de suite : on réessaie quelques secondes plus tard au lieu d'abandonner en silence.
+let autoT = null;
+async function autoOpenRefresh(delays = [0, 3000, 8000, 20000]) {
+  if (!od.link || !od.account || document.visibilityState !== 'visible') return;
+  if (Date.now() - od.lastCheck < 60000) return;
+  clearTimeout(autoT);
+  for (let i = 0; i < delays.length; i++) {
+    if (delays[i]) await new Promise(r => { autoT = setTimeout(r, delays[i]); });
+    if (document.visibilityState !== 'visible') return;
+    if (od.busy) continue;
+    if (await odRefresh({ quiet: true })) return;
+  }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') autoOpenRefresh(); });
+window.addEventListener('pageshow', () => autoOpenRefresh());
+window.addEventListener('focus', () => autoOpenRefresh());
+window.addEventListener('online', () => { od.lastCheck = 0; autoOpenRefresh(); });
 $('#btn-cam').onclick = () => { ensureAudio(); if (liveOK) startLive('scan'); else openPhoto('scan'); };
 $('#btn-refresh').onclick = () => { ensureAudio(); if (od.link) odRefresh({ interactive: true }); else pickFile(); };
 
@@ -1636,7 +1654,7 @@ setInterval(checkAppUpdate, 30 * 60000);
   readHash();
   if (odAvailable()) {
     await odInit();
-    if (od.account && od.link) odRefresh({ quiet: !!D });
+    if (od.account && od.link) { if (!D) odRefresh({ quiet: false }); else autoOpenRefresh(); }
     else if (od.account && od.justLogged) { openSettings(); toast('Connecté. Cherchez maintenant votre fichier.'); }
     afterData();
   }

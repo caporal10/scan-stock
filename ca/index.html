@@ -15,7 +15,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script>window.APP_VERSION = '09/11 18:28';</script>
+<script>window.APP_VERSION = '12/11 11:59';</script>
 <style>
 /* Suivi CA : une colonne mobile. Barre du haut (fraîcheur des données), réglages (mesure, période, périmètre),
    chiffre principal, graphique 12 mois N / N-1 / objectif, détail par dépôt, enseigne et magasin. */
@@ -661,20 +661,37 @@ async function odRefresh({ force = false, interactive = false, quiet = false } =
   od.busy = true; $('#btn-refresh').classList.add('busy');
   try {
     const tk = await odToken(interactive);
-    if (!tk) { if (!quiet) toast('Connexion OneDrive expirée : touchez Actualiser pour vous reconnecter.'); return; }
+    if (!tk) { if (!quiet) toast('Connexion OneDrive expirée : touchez Actualiser pour vous reconnecter.'); return false; }
     const meta = await graph(`/drives/${encodeURIComponent(od.link.driveId)}/items/${encodeURIComponent(od.link.id)}`, tk);
     od.lastCheck = Date.now();
     const mod = Date.parse(meta.lastModifiedDateTime);
-    if (!force && M && od.mod === mod) { if (!quiet) toast('Déjà à jour'); return; }
+    if (!force && M && od.mod === mod) { if (!quiet) toast('Déjà à jour'); return true; }
     const url = meta['@microsoft.graph.downloadUrl'];
     const buf = await (url ? fetch(url) : fetch(`https://graph.microsoft.com/v1.0/drives/${encodeURIComponent(od.link.driveId)}/items/${encodeURIComponent(od.link.id)}/content`, { headers: { Authorization: 'Bearer ' + tk } })).then(r => { if (!r.ok) throw new Error('téléchargement ' + r.status); return r.arrayBuffer(); });
     loadBuffer(new Uint8Array(buf), { name: meta.name, mod });
     od.mod = mod; store.set('odmod', mod);
     if (!quiet) toast('Données actualisées');
-  } catch (e) { if (!quiet) toast('Actualisation impossible : ' + (e.message || e)); }
+    return true;
+  } catch (e) { if (!quiet) toast('Actualisation impossible : ' + (e.message || e)); return false; }
   finally { od.busy = false; $('#btn-refresh').classList.remove('busy'); }
 }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && od.link && Date.now() - od.lastCheck > 2 * 60000) odRefresh({ quiet: true }); });
+// Actualisation à l'ouverture / au retour (avec nouvelles tentatives : au réveil de l'iPhone le réseau n'est pas toujours prêt)
+let autoT = null;
+async function autoOpenRefresh(delays = [0, 3000, 8000, 20000]) {
+  if (!od.link || !od.account || document.visibilityState !== 'visible') return;
+  if (Date.now() - od.lastCheck < 60000) return;
+  clearTimeout(autoT);
+  for (let i = 0; i < delays.length; i++) {
+    if (delays[i]) await new Promise(r => { autoT = setTimeout(r, delays[i]); });
+    if (document.visibilityState !== 'visible') return;
+    if (od.busy) continue;
+    if (await odRefresh({ quiet: true })) return;
+  }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') autoOpenRefresh(); });
+window.addEventListener('pageshow', () => autoOpenRefresh());
+window.addEventListener('focus', () => autoOpenRefresh());
+window.addEventListener('online', () => { od.lastCheck = 0; autoOpenRefresh(); });
 $('#btn-refresh').onclick = () => odRefresh({ interactive: true });
 $('#btn-set').onclick = openSettings;
 document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => { S.t = b.dataset.tab; saveUI(); render(); window.scrollTo(0, 0); });
@@ -825,7 +842,7 @@ function openSettings() {
   if (saved && saved.buf) { try { loadBuffer(saved.buf, saved.meta); } catch (e) {} }
   await odInit();
   if (od.justLogged && !od.link) openSettings();
-  if (od.link && od.account) odRefresh({ quiet: !!M });
+  if (od.link && od.account) { if (!M) odRefresh({ quiet: false }); else autoOpenRefresh(); }
 })();
 if ('serviceWorker' in navigator && !inFrame) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { scope: './' }).catch(() => {}));
 </script>
