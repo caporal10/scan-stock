@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '12/11 11:59';</script>
+<script>window.APP_VERSION = '17/11 16:32';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -1275,6 +1275,12 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 window.addEventListener('pageshow', () => autoOpenRefresh());
 window.addEventListener('focus', () => autoOpenRefresh());
 window.addEventListener('online', () => { od.lastCheck = 0; autoOpenRefresh(); });
+// Appli restée ouverte : vérification régulière (le PC publie une nouvelle copie tous les quarts d'heure ;
+// on ne télécharge que si le fichier a changé). Pas pendant un scan.
+setInterval(() => {
+  if (document.visibilityState !== 'visible' || od.busy || !od.link || !od.account || !$('#cam').hidden) return;
+  if (Date.now() - od.lastCheck > 3 * 60000) odRefresh({ quiet: true });
+}, 60000);
 $('#btn-cam').onclick = () => { ensureAudio(); if (liveOK) startLive('scan'); else openPhoto('scan'); };
 $('#btn-refresh').onclick = () => { ensureAudio(); if (od.link) odRefresh({ interactive: true }); else pickFile(); };
 

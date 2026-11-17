@@ -15,7 +15,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
-<script>window.APP_VERSION = '12/11 11:59';</script>
+<script>window.APP_VERSION = '17/11 16:32';</script>
 <style>
 /* Suivi CA : une colonne mobile. Barre du haut (fraîcheur des données), réglages (mesure, période, périmètre),
    chiffre principal, graphique 12 mois N / N-1 / objectif, détail par dépôt, enseigne et magasin. */
@@ -692,6 +692,12 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 window.addEventListener('pageshow', () => autoOpenRefresh());
 window.addEventListener('focus', () => autoOpenRefresh());
 window.addEventListener('online', () => { od.lastCheck = 0; autoOpenRefresh(); });
+// Appli restée ouverte : vérification régulière (le PC publie une nouvelle copie tous les quarts d'heure ;
+// on ne télécharge que si le fichier a changé). Pas pendant un scan.
+setInterval(() => {
+  if (document.visibilityState !== 'visible' || od.busy || !od.link || !od.account) return;
+  if (Date.now() - od.lastCheck > 3 * 60000) odRefresh({ quiet: true });
+}, 60000);
 $('#btn-refresh').onclick = () => odRefresh({ interactive: true });
 $('#btn-set').onclick = openSettings;
 document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => { S.t = b.dataset.tab; saveUI(); render(); window.scrollTo(0, 0); });
