@@ -1565,7 +1565,7 @@ function livExportRows() {
   [...expDays].sort((a, b) => a - b).forEach(n => {
     const its = (byDay.get(n) || []).filter(inLiv);
     its.sort((a, b) => ((creneauMin(a) - creneauMin(b)) || 0) || (show(a, 'Nom_Client') || '').localeCompare(show(b, 'Nom_Client') || '', 'fr') || (show(a, 'Modele') || '').localeCompare(show(b, 'Modele') || '', 'fr'));
-    its.forEach(i => out.push({ n, slot: D.creneau ? (slotText(i) || '') : '', client: show(i, 'Nom_Client') || '', fourn: show(i, 'Fournisseur') || '', modele: show(i, 'Modele') || show(i, 'Article') || '', lieu: (t => LIEU[t] || t)(show(i, 'Type_Stock').toUpperCase()), zone: show(i, 'Localite') || '' }));
+    its.forEach(i => out.push({ n, slot: D.creneau ? (show(i, D.creneau) || '') : '', client: show(i, 'Nom_Client') || '', fourn: show(i, 'Fournisseur') || '', modele: show(i, 'Modele') || show(i, 'Article') || '', lieu: (t => LIEU[t] || t)(show(i, 'Type_Stock').toUpperCase()), zone: show(i, 'Localite') || '' }));
   });
   return out;
 }
@@ -1586,10 +1586,10 @@ function livExport(kind) {
   const sub = [profil().label, rows.length + ' article' + (rows.length > 1 ? 's' : ''), D.meta ? 'données du ' + fmtDT(freshness().when) : ''].filter(Boolean).join(' · ');
   const fname = 'Livraisons-' + fmtSerial(d[0], { day: '2-digit', month: '2-digit' }).replace('/', '-') + (d.length > 1 ? '-au-' + fmtSerial(d[d.length - 1], { day: '2-digit', month: '2-digit' }).replace('/', '-') : '');
   if (kind === 'xls') {
-    const aoa = [[title], [sub], [], ['Date', 'Créneau', 'Client', 'Fournisseur', 'Modèle', 'Lieu', 'Zone']];
+    const aoa = [[title], [sub], [], ['Date', 'Heure', 'Client', 'Fournisseur', 'Modèle', 'Lieu', 'Zone']];
     rows.forEach(r => aoa.push([serialDate(r.n), r.slot, r.client, r.fourn, r.modele, r.lieu, r.zone]));
     const ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true });
-    ws['!cols'] = [{ wch: 12 }, { wch: 13 }, { wch: 28 }, { wch: 22 }, { wch: 32 }, { wch: 10 }, { wch: 14 }];
+    ws['!cols'] = [{ wch: 12 }, { wch: 7 }, { wch: 28 }, { wch: 22 }, { wch: 32 }, { wch: 10 }, { wch: 14 }];
     for (let r = 4; r < aoa.length; r++) { const c = ws[XLSX.utils.encode_cell({ r, c: 0 })]; if (c) c.z = 'ddd dd/mm'; }
     ws['!autofilter'] = { ref: 'A4:G' + aoa.length };
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Livraisons');
@@ -1597,7 +1597,7 @@ function livExport(kind) {
     return;
   }
   // Image : une bande par jour, puis une ligne par article
-  const cols = [['Date', 84], ['Créneau', 118], ['Client', 182], ['Fournisseur', 142], ['Modèle', 186], ['Lieu', 78], ['Zone', 150]];
+  const cols = [['Date', 84], ['Heure', 66], ['Client', 160], ['Fournisseur', 142], ['Modèle', 186], ['Lieu', 78], ['Zone', 150]];
   const PX = 8, W = PX + cols.reduce((a, c) => a + c[1], 0) + 2, rh = 28, dh = 30, top = 84;
   const nDays = new Set(rows.map(r => r.n)).size, H = top + rh + nDays * dh + rows.length * rh + 24;
   const sc = Math.max(1, Math.min(2, Math.sqrt(15e6 / (W * H))));
