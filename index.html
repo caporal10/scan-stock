@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '19/11 12:47';</script>
+<script>window.APP_VERSION = '19/11 13:55';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -1565,7 +1565,7 @@ function livExportRows() {
   [...expDays].sort((a, b) => a - b).forEach(n => {
     const its = (byDay.get(n) || []).filter(inLiv);
     its.sort((a, b) => ((creneauMin(a) - creneauMin(b)) || 0) || (show(a, 'Nom_Client') || '').localeCompare(show(b, 'Nom_Client') || '', 'fr') || (show(a, 'Modele') || '').localeCompare(show(b, 'Modele') || '', 'fr'));
-    its.forEach(i => out.push({ n, slot: D.creneau ? (slotText(i) || '') : '', client: show(i, 'Nom_Client') || '', fourn: show(i, 'Fournisseur') || '', modele: show(i, 'Modele') || show(i, 'Article') || '', zone: show(i, 'Localite') || '' }));
+    its.forEach(i => out.push({ n, slot: D.creneau ? (slotText(i) || '') : '', client: show(i, 'Nom_Client') || '', fourn: show(i, 'Fournisseur') || '', modele: show(i, 'Modele') || show(i, 'Article') || '', lieu: (t => LIEU[t] || t)(show(i, 'Type_Stock').toUpperCase()), zone: show(i, 'Localite') || '' }));
   });
   return out;
 }
@@ -1586,18 +1586,18 @@ function livExport(kind) {
   const sub = [profil().label, rows.length + ' article' + (rows.length > 1 ? 's' : ''), D.meta ? 'données du ' + fmtDT(freshness().when) : ''].filter(Boolean).join(' · ');
   const fname = 'Livraisons-' + fmtSerial(d[0], { day: '2-digit', month: '2-digit' }).replace('/', '-') + (d.length > 1 ? '-au-' + fmtSerial(d[d.length - 1], { day: '2-digit', month: '2-digit' }).replace('/', '-') : '');
   if (kind === 'xls') {
-    const aoa = [[title], [sub], [], ['Date', 'Créneau', 'Client', 'Fournisseur', 'Modèle', 'Zone']];
-    rows.forEach(r => aoa.push([serialDate(r.n), r.slot, r.client, r.fourn, r.modele, r.zone]));
+    const aoa = [[title], [sub], [], ['Date', 'Créneau', 'Client', 'Fournisseur', 'Modèle', 'Lieu', 'Zone']];
+    rows.forEach(r => aoa.push([serialDate(r.n), r.slot, r.client, r.fourn, r.modele, r.lieu, r.zone]));
     const ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true });
-    ws['!cols'] = [{ wch: 12 }, { wch: 13 }, { wch: 28 }, { wch: 22 }, { wch: 32 }, { wch: 12 }];
+    ws['!cols'] = [{ wch: 12 }, { wch: 13 }, { wch: 28 }, { wch: 22 }, { wch: 32 }, { wch: 10 }, { wch: 14 }];
     for (let r = 4; r < aoa.length; r++) { const c = ws[XLSX.utils.encode_cell({ r, c: 0 })]; if (c) c.z = 'ddd dd/mm'; }
-    ws['!autofilter'] = { ref: 'A4:F' + aoa.length };
+    ws['!autofilter'] = { ref: 'A4:G' + aoa.length };
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Livraisons');
     shareFile(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname + '.xlsx');
     return;
   }
   // Image : une bande par jour, puis une ligne par article
-  const cols = [['Date', 84], ['Créneau', 118], ['Client', 190], ['Fournisseur', 150], ['Modèle', 196], ['Zone', 150]];
+  const cols = [['Date', 84], ['Créneau', 118], ['Client', 182], ['Fournisseur', 142], ['Modèle', 186], ['Lieu', 78], ['Zone', 150]];
   const PX = 8, W = PX + cols.reduce((a, c) => a + c[1], 0) + 2, rh = 28, dh = 30, top = 84;
   const nDays = new Set(rows.map(r => r.n)).size, H = top + rh + nDays * dh + rows.length * rh + 24;
   const sc = Math.max(1, Math.min(2, Math.sqrt(15e6 / (W * H))));
@@ -1622,10 +1622,10 @@ function livExport(kind) {
       y += dh;
     }
     x.strokeStyle = '#e6ebe8'; x.beginPath(); x.moveTo(0, y + rh - .5); x.lineTo(W, y + rh - .5); x.stroke();
-    const vals = [fmtSerial(r.n, { weekday: 'short', day: '2-digit', month: '2-digit' }), r.slot, r.client, r.fourn, r.modele, r.zone];
+    const vals = [fmtSerial(r.n, { weekday: 'short', day: '2-digit', month: '2-digit' }), r.slot, r.client, r.fourn, r.modele, r.lieu, r.zone];
     cx = PX; vals.forEach((v, k) => {
-      x.fillStyle = k === 1 ? '#0f5e57' : '#16201c'; x.font = k === 1 ? F(600, 13) : k === 5 ? `600 12.5px "IBM Plex Mono", ui-monospace, Menlo, monospace` : F(400, 13);
-      x.fillText(fit(v || (k === 5 || k === 1 ? '—' : ''), cols[k][1] - 8), cx, y + 19); cx += cols[k][1];
+      x.fillStyle = k === 1 ? '#0f5e57' : k === 5 && v === 'Magasin' ? '#b45309' : '#16201c'; x.font = k === 1 || k === 5 ? F(600, 13) : k === 6 ? `600 12.5px "IBM Plex Mono", ui-monospace, Menlo, monospace` : F(400, 13);
+      x.fillText(fit(v || (k === 6 || k === 1 ? '—' : ''), cols[k][1] - 8), cx, y + 19); cx += cols[k][1];
     });
     y += rh;
   });
