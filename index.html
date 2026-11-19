@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '19/11 12:41';</script>
+<script>window.APP_VERSION = '19/11 12:47';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -1597,8 +1597,8 @@ function livExport(kind) {
     return;
   }
   // Image : une bande par jour, puis une ligne par article
-  const cols = [['Date', 88], ['Créneau', 120], ['Client', 196], ['Fournisseur', 156], ['Modèle', 232], ['Zone', 92]];
-  const W = 16 + cols.reduce((a, c) => a + c[1], 0) + 16, rh = 28, dh = 30, top = 84;
+  const cols = [['Date', 84], ['Créneau', 118], ['Client', 190], ['Fournisseur', 150], ['Modèle', 196], ['Zone', 150]];
+  const PX = 8, W = PX + cols.reduce((a, c) => a + c[1], 0) + 2, rh = 28, dh = 30, top = 84;
   const nDays = new Set(rows.map(r => r.n)).size, H = top + rh + nDays * dh + rows.length * rh + 24;
   const sc = Math.max(1, Math.min(2, Math.sqrt(15e6 / (W * H))));
   const cv = document.createElement('canvas'); cv.width = Math.round(W * sc); cv.height = Math.round(H * sc);
@@ -1606,26 +1606,26 @@ function livExport(kind) {
   const F = (w, z) => `${w} ${z}px "IBM Plex Sans", system-ui, -apple-system, sans-serif`;
   const fit = (t, w) => { t = String(t); if (x.measureText(t).width <= w) return t; while (t.length > 1 && x.measureText(t + '…').width > w) t = t.slice(0, -1); return t + '…'; };
   x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
-  x.fillStyle = '#16201c'; x.font = F(700, 19); x.fillText(fit(title, W - 32), 16, 34);
-  x.fillStyle = '#5d6a64'; x.font = F(400, 12); x.fillText(fit(sub, W - 32), 16, 56);
+  x.fillStyle = '#16201c'; x.font = F(700, 19); x.fillText(fit(title, W - 2 * PX), PX, 34);
+  x.fillStyle = '#5d6a64'; x.font = F(400, 12); x.fillText(fit(sub, W - 2 * PX), PX, 56);
   let y = top;
-  x.fillStyle = '#0f5e57'; x.fillRect(8, y, W - 16, rh); x.fillStyle = '#fff'; x.font = F(600, 12.5);
-  let cx = 16; cols.forEach(([l, w]) => { x.fillText(l, cx, y + 19); cx += w; }); y += rh;
+  x.fillStyle = '#0f5e57'; x.fillRect(0, y, W, rh); x.fillStyle = '#fff'; x.font = F(600, 12.5);
+  let cx = PX; cols.forEach(([l, w]) => { x.fillText(l, cx, y + 19); cx += w; }); y += rh;
   let cur = null;
   rows.forEach(r => {
     if (r.n !== cur) {
       cur = r.n; const its = rows.filter(z => z.n === cur), nc = new Set(its.map(z => z.client)).size;
-      x.fillStyle = '#dce8e4'; x.fillRect(8, y, W - 16, dh);
+      x.fillStyle = '#dce8e4'; x.fillRect(0, y, W, dh);
       x.fillStyle = '#16201c'; x.font = F(700, 13.5); const t = fmtSerial(cur, { weekday: 'long', day: 'numeric', month: 'long' }); const tt = t.charAt(0).toUpperCase() + t.slice(1);
-      x.fillText(tt, 16, y + 20); const w0 = x.measureText(tt).width;
-      x.fillStyle = '#5d6a64'; x.font = F(400, 12.5); x.fillText(`${its.length} article${its.length > 1 ? 's' : ''} · ${nc} client${nc > 1 ? 's' : ''}`, 16 + w0 + 10, y + 20);
+      x.fillText(tt, PX, y + 20); const w0 = x.measureText(tt).width;
+      x.fillStyle = '#5d6a64'; x.font = F(400, 12.5); x.fillText(`${its.length} article${its.length > 1 ? 's' : ''} · ${nc} client${nc > 1 ? 's' : ''}`, PX + w0 + 10, y + 20);
       y += dh;
     }
-    x.strokeStyle = '#e6ebe8'; x.beginPath(); x.moveTo(8, y + rh - .5); x.lineTo(W - 8, y + rh - .5); x.stroke();
+    x.strokeStyle = '#e6ebe8'; x.beginPath(); x.moveTo(0, y + rh - .5); x.lineTo(W, y + rh - .5); x.stroke();
     const vals = [fmtSerial(r.n, { weekday: 'short', day: '2-digit', month: '2-digit' }), r.slot, r.client, r.fourn, r.modele, r.zone];
-    cx = 16; vals.forEach((v, k) => {
+    cx = PX; vals.forEach((v, k) => {
       x.fillStyle = k === 1 ? '#0f5e57' : '#16201c'; x.font = k === 1 ? F(600, 13) : k === 5 ? `600 12.5px "IBM Plex Mono", ui-monospace, Menlo, monospace` : F(400, 13);
-      x.fillText(fit(v || (k === 5 || k === 1 ? '—' : ''), cols[k][1] - 10), cx, y + 19); cx += cols[k][1];
+      x.fillText(fit(v || (k === 5 || k === 1 ? '—' : ''), cols[k][1] - 8), cx, y + 19); cx += cols[k][1];
     });
     y += rh;
   });
