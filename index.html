@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '19/11 12:37';</script>
+<script>window.APP_VERSION = '19/11 12:40';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -1524,9 +1524,12 @@ function livInFn() {
   return i => ensOK(i) && inLiv0(i);
 }
 /* ---------- Export des livraisons : une ligne par article (Date | Client | Fournisseur | Modèle | Zone) ---------- */
-let expDays = new Set();
+let expDays = new Set(), expHideLiv = true;
+// Articles déjà en zone de livraison 1 ou 2 (localité « LIVRAISON 1 », « ZDM-LIV2 », « Zone livraison 1 »…)
+const enZoneLiv = i => /\bliv[a-zé]*\W*[12]\b/i.test(show(i, 'Localite') || '');
+function livExpFn() { const inLiv = livInFn(); return i => inLiv(i) && !(expHideLiv && enZoneLiv(i)); }
 function openLivExport() {
-  const today = daySerial(new Date()), byDay = livIndex(), inLiv = livInFn();
+  const today = daySerial(new Date()), byDay = livIndex(), inLiv = livExpFn();
   const cnt = n => (byDay.get(n) || []).filter(inLiv).length;
   const lundi = today - ((serialDate(today).getDay() + 6) % 7);
   const days = []; for (let k = 0; k < 21; k++) { const n = lundi + k; if (serialDate(n).getDay() !== 0) days.push(n); }
@@ -1537,17 +1540,20 @@ function openLivExport() {
     proch: [7, 8, 9, 10, 11, 12].map(k => lundi + k)
   };
   const draw = () => {
-    const tot = [...expDays].reduce((a, n) => a + cnt(n), 0);
+    const tot = [...expDays].reduce((a, n) => a + cnt(n), 0), inAll = livInFn();
+    const hid = [...expDays].reduce((a, n) => a + (byDay.get(n) || []).filter(i => inAll(i) && enZoneLiv(i)).length, 0);
     $('#sheet-in').querySelector('#ex-body').innerHTML = `
       <div class="panel"><h3 style="margin:0">Jours</h3>
         <div class="chips">${[['auj', 'Aujourd\u2019hui'], ['dem', 'Demain'], ['sem', 'Cette semaine'], ['proch', 'Semaine prochaine']].map(([k, l]) => `<button class="chip" data-q="${k}" aria-pressed="${quick[k].length && quick[k].every(n => expDays.has(n)) && expDays.size === quick[k].length}">${l}</button>`).join('')}</div>
         ${[0, 1, 2].map(w => `<div class="chips">${days.slice(w * 6, w * 6 + 6).map(n => `<button class="chip" data-d="${n}" aria-pressed="${expDays.has(n)}" ${n < today ? 'style="opacity:.55"' : ''}>${esc(fmtSerial(n, { weekday: 'short', day: 'numeric' }))} · <b>${cnt(n)}</b></button>`).join('')}</div>`).join('')}
         <p class="hint">Touchez un jour pour l\u2019ajouter ou l\u2019enlever. Le chiffre = nombre d\u2019articles. ${esc(profil().label || '')}</p></div>
+      <div class="panel"><label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="ex-hideliv" ${expHideLiv ? 'checked' : ''} style="width:22px;height:22px;flex:none;margin-top:1px;accent-color:var(--accent)"><span><b>Masquer les articles déjà en zone livraison 1 ou 2</b><br><span class="hint">${hid} article${hid > 1 ? 's' : ''} en zone livraison sur ces jours${expHideLiv && hid ? ' (masqué' + (hid > 1 ? 's' : '') + ')' : ''}.</span></span></label></div>
       <div class="panel"><h3 style="margin:0">Format · ${tot} article${tot > 1 ? 's' : ''}</h3>
         <div class="chips"><button class="btn primary" id="ex-img" ${tot ? '' : 'disabled'}>Image (à envoyer)</button><button class="btn" id="ex-xls" ${tot ? '' : 'disabled'}>Fichier Excel</button></div></div>`;
     const b = $('#sheet-in');
     b.querySelectorAll('[data-d]').forEach(x => x.onclick = () => { const n = +x.dataset.d; expDays.has(n) ? expDays.delete(n) : expDays.add(n); draw(); });
     b.querySelectorAll('[data-q]').forEach(x => x.onclick = () => { expDays = new Set(quick[x.dataset.q]); draw(); });
+    b.querySelector('#ex-hideliv').onchange = e => { expHideLiv = e.target.checked; draw(); };
     const ex = b.querySelector('#ex-img'), xl = b.querySelector('#ex-xls');
     if (ex) ex.onclick = () => livExport('img'); if (xl) xl.onclick = () => livExport('xls');
   };
@@ -1555,7 +1561,7 @@ function openLivExport() {
   draw();
 }
 function livExportRows() {
-  const byDay = livIndex(), inLiv = livInFn(), out = [];
+  const byDay = livIndex(), inLiv = livExpFn(), out = [];
   [...expDays].sort((a, b) => a - b).forEach(n => {
     const its = (byDay.get(n) || []).filter(inLiv);
     its.sort((a, b) => ((creneauMin(a) - creneauMin(b)) || 0) || (show(a, 'Nom_Client') || '').localeCompare(show(b, 'Nom_Client') || '', 'fr') || (show(a, 'Modele') || '').localeCompare(show(b, 'Modele') || '', 'fr'));
