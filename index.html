@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png">
-<script>window.APP_VERSION = '17/11 16:32';</script>
+<script>window.APP_VERSION = '19/11 12:37';</script>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 </head>
 <body>
@@ -389,6 +389,7 @@ body.noscroll{overflow:hidden}
         <div class="chips" id="liv-upcoming"></div>
       </div>
       <div id="liv-scope"></div>
+      <button class="btn" id="liv-export" style="align-self:flex-start"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Exporter des jours de livraison</button>
       <div id="liv-sum"></div>
       <div class="chips" id="liv-tours"></div>
       <div id="liv-list" class="view" style="gap:14px"></div>
@@ -1513,6 +1514,117 @@ function livIndex() {
   if (c != null) D.rows.forEach((r, i) => { const n = toSerial(r[c]); if (n == null) return; if (!byDay.has(n)) byDay.set(n, []); byDay.get(n).push(i); });
   return D.livCache = byDay;
 }
+// Filtre du profil (dépôt : ses tournées ; magasin : ses clients ; enseigne)
+function livInFn() {
+  const prof = profil(), sc = scopeMags(isLocked() && !!prof.ens);
+  const tourNum = t => { const m = /^\s*(\d+)/.exec(t || ''); return m ? +m[1] : null; };
+  const inLiv0 = !sc ? (() => true)
+    : prof.tours ? (i => prof.tours.includes(tourNum(show(i, 'Tournee'))))
+    : (i => sc.names.has(norm(show(i, 'Magasin'))));
+  return i => ensOK(i) && inLiv0(i);
+}
+/* ---------- Export des livraisons : une ligne par article (Date | Client | Fournisseur | Modèle | Zone) ---------- */
+let expDays = new Set();
+function openLivExport() {
+  const today = daySerial(new Date()), byDay = livIndex(), inLiv = livInFn();
+  const cnt = n => (byDay.get(n) || []).filter(inLiv).length;
+  const lundi = today - ((serialDate(today).getDay() + 6) % 7);
+  const days = []; for (let k = 0; k < 21; k++) { const n = lundi + k; if (serialDate(n).getDay() !== 0) days.push(n); }
+  if (!expDays.size) expDays = new Set([livDay]);
+  const quick = {
+    auj: [today], dem: [today + 1],
+    sem: [0, 1, 2, 3, 4, 5].map(k => lundi + k).filter(n => n >= today),
+    proch: [7, 8, 9, 10, 11, 12].map(k => lundi + k)
+  };
+  const draw = () => {
+    const tot = [...expDays].reduce((a, n) => a + cnt(n), 0);
+    $('#sheet-in').querySelector('#ex-body').innerHTML = `
+      <div class="panel"><h3 style="margin:0">Jours</h3>
+        <div class="chips">${[['auj', 'Aujourd\u2019hui'], ['dem', 'Demain'], ['sem', 'Cette semaine'], ['proch', 'Semaine prochaine']].map(([k, l]) => `<button class="chip" data-q="${k}" aria-pressed="${quick[k].length && quick[k].every(n => expDays.has(n)) && expDays.size === quick[k].length}">${l}</button>`).join('')}</div>
+        ${[0, 1, 2].map(w => `<div class="chips">${days.slice(w * 6, w * 6 + 6).map(n => `<button class="chip" data-d="${n}" aria-pressed="${expDays.has(n)}" ${n < today ? 'style="opacity:.55"' : ''}>${esc(fmtSerial(n, { weekday: 'short', day: 'numeric' }))} · <b>${cnt(n)}</b></button>`).join('')}</div>`).join('')}
+        <p class="hint">Touchez un jour pour l\u2019ajouter ou l\u2019enlever. Le chiffre = nombre d\u2019articles. ${esc(profil().label || '')}</p></div>
+      <div class="panel"><h3 style="margin:0">Format · ${tot} article${tot > 1 ? 's' : ''}</h3>
+        <div class="chips"><button class="btn primary" id="ex-img" ${tot ? '' : 'disabled'}>Image (à envoyer)</button><button class="btn" id="ex-xls" ${tot ? '' : 'disabled'}>Fichier Excel</button></div></div>`;
+    const b = $('#sheet-in');
+    b.querySelectorAll('[data-d]').forEach(x => x.onclick = () => { const n = +x.dataset.d; expDays.has(n) ? expDays.delete(n) : expDays.add(n); draw(); });
+    b.querySelectorAll('[data-q]').forEach(x => x.onclick = () => { expDays = new Set(quick[x.dataset.q]); draw(); });
+    const ex = b.querySelector('#ex-img'), xl = b.querySelector('#ex-xls');
+    if (ex) ex.onclick = () => livExport('img'); if (xl) xl.onclick = () => livExport('xls');
+  };
+  openSheet('Exporter les livraisons', '<div id="ex-body" style="display:flex;flex-direction:column;gap:12px"></div>');
+  draw();
+}
+function livExportRows() {
+  const byDay = livIndex(), inLiv = livInFn(), out = [];
+  [...expDays].sort((a, b) => a - b).forEach(n => {
+    const its = (byDay.get(n) || []).filter(inLiv);
+    its.sort((a, b) => ((creneauMin(a) - creneauMin(b)) || 0) || (show(a, 'Nom_Client') || '').localeCompare(show(b, 'Nom_Client') || '', 'fr') || (show(a, 'Modele') || '').localeCompare(show(b, 'Modele') || '', 'fr'));
+    its.forEach(i => out.push({ n, client: show(i, 'Nom_Client') || '', fourn: show(i, 'Fournisseur') || '', modele: show(i, 'Modele') || show(i, 'Article') || '', zone: show(i, 'Localite') || '' }));
+  });
+  return out;
+}
+function livExportTitle() {
+  const d = [...expDays].sort((a, b) => a - b);
+  if (d.length === 1) return 'Livraisons du ' + fmtSerial(d[0], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const consec = d.every((n, k) => !k || n - d[k - 1] === 1 || (n - d[k - 1] === 2 && serialDate(n - 1).getDay() === 0));
+  return consec ? 'Livraisons du ' + fmtSerial(d[0], { weekday: 'long', day: 'numeric', month: 'long' }) + ' au ' + fmtSerial(d[d.length - 1], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    : 'Livraisons : ' + d.map(n => fmtSerial(n, { weekday: 'short', day: 'numeric', month: 'short' })).join(', ');
+}
+async function shareFile(blob, name) {
+  const file = new File([blob], name, { type: blob.type });
+  try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+}
+function livExport(kind) {
+  const rows = livExportRows(), title = livExportTitle(), d = [...expDays].sort((a, b) => a - b);
+  const sub = [profil().label, rows.length + ' article' + (rows.length > 1 ? 's' : ''), D.meta ? 'données du ' + fmtDT(freshness().when) : ''].filter(Boolean).join(' · ');
+  const fname = 'Livraisons-' + fmtSerial(d[0], { day: '2-digit', month: '2-digit' }).replace('/', '-') + (d.length > 1 ? '-au-' + fmtSerial(d[d.length - 1], { day: '2-digit', month: '2-digit' }).replace('/', '-') : '');
+  if (kind === 'xls') {
+    const aoa = [[title], [sub], [], ['Date', 'Client', 'Fournisseur', 'Modèle', 'Zone']];
+    rows.forEach(r => aoa.push([serialDate(r.n), r.client, r.fourn, r.modele, r.zone]));
+    const ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true });
+    ws['!cols'] = [{ wch: 12 }, { wch: 28 }, { wch: 22 }, { wch: 32 }, { wch: 12 }];
+    for (let r = 4; r < aoa.length; r++) { const c = ws[XLSX.utils.encode_cell({ r, c: 0 })]; if (c) c.z = 'ddd dd/mm'; }
+    ws['!autofilter'] = { ref: 'A4:E' + aoa.length };
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Livraisons');
+    shareFile(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fname + '.xlsx');
+    return;
+  }
+  // Image : une bande par jour, puis une ligne par article
+  const cols = [['Date', 92], ['Client', 210], ['Fournisseur', 170], ['Modèle', 250], ['Zone', 96]];
+  const W = 16 + cols.reduce((a, c) => a + c[1], 0) + 16, rh = 28, dh = 30, top = 84;
+  const nDays = new Set(rows.map(r => r.n)).size, H = top + rh + nDays * dh + rows.length * rh + 24;
+  const sc = Math.max(1, Math.min(2, Math.sqrt(15e6 / (W * H))));
+  const cv = document.createElement('canvas'); cv.width = Math.round(W * sc); cv.height = Math.round(H * sc);
+  const x = cv.getContext('2d'); x.scale(sc, sc);
+  const F = (w, z) => `${w} ${z}px "IBM Plex Sans", system-ui, -apple-system, sans-serif`;
+  const fit = (t, w) => { t = String(t); if (x.measureText(t).width <= w) return t; while (t.length > 1 && x.measureText(t + '…').width > w) t = t.slice(0, -1); return t + '…'; };
+  x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
+  x.fillStyle = '#16201c'; x.font = F(700, 19); x.fillText(fit(title, W - 32), 16, 34);
+  x.fillStyle = '#5d6a64'; x.font = F(400, 12); x.fillText(fit(sub, W - 32), 16, 56);
+  let y = top;
+  x.fillStyle = '#0f5e57'; x.fillRect(8, y, W - 16, rh); x.fillStyle = '#fff'; x.font = F(600, 12.5);
+  let cx = 16; cols.forEach(([l, w]) => { x.fillText(l, cx, y + 19); cx += w; }); y += rh;
+  let cur = null;
+  rows.forEach(r => {
+    if (r.n !== cur) {
+      cur = r.n; const its = rows.filter(z => z.n === cur), nc = new Set(its.map(z => z.client)).size;
+      x.fillStyle = '#dce8e4'; x.fillRect(8, y, W - 16, dh);
+      x.fillStyle = '#16201c'; x.font = F(700, 13.5); const t = fmtSerial(cur, { weekday: 'long', day: 'numeric', month: 'long' }); const tt = t.charAt(0).toUpperCase() + t.slice(1);
+      x.fillText(tt, 16, y + 20); const w0 = x.measureText(tt).width;
+      x.fillStyle = '#5d6a64'; x.font = F(400, 12.5); x.fillText(`${its.length} article${its.length > 1 ? 's' : ''} · ${nc} client${nc > 1 ? 's' : ''}`, 16 + w0 + 10, y + 20);
+      y += dh;
+    }
+    x.strokeStyle = '#e6ebe8'; x.beginPath(); x.moveTo(8, y + rh - .5); x.lineTo(W - 8, y + rh - .5); x.stroke();
+    const vals = [fmtSerial(r.n, { weekday: 'short', day: '2-digit', month: '2-digit' }), r.client, r.fourn, r.modele, r.zone];
+    cx = 16; vals.forEach((v, k) => {
+      x.fillStyle = '#16201c'; x.font = k === 4 ? `600 12.5px "IBM Plex Mono", ui-monospace, Menlo, monospace` : F(400, 13);
+      x.fillText(fit(v || (k === 4 ? '—' : ''), cols[k][1] - 10), cx, y + 19); cx += cols[k][1];
+    });
+    y += rh;
+  });
+  cv.toBlob(b => shareFile(b, fname + '.png'), 'image/png');
+}
 function renderLiv() {
   const today = daySerial(new Date());
   if (livDay == null) livDay = settings.livJour === 'auj' ? today : today + 1;
@@ -1524,12 +1636,7 @@ function renderLiv() {
   const sd = serialDate(livDay);
   $('#liv-input').value = `${sd.getFullYear()}-${String(sd.getMonth() + 1).padStart(2, '0')}-${String(sd.getDate()).padStart(2, '0')}`;
   // prochains jours avec livraisons
-  const prof = profil(), sc = scopeMags(isLocked() && !!prof.ens);
-  const tourNum = t => { const m = /^\s*(\d+)/.exec(t || ''); return m ? +m[1] : null; };
-  const inLiv0 = !sc ? (() => true)
-    : prof.tours ? (i => prof.tours.includes(tourNum(show(i, 'Tournee'))))
-    : (i => sc.names.has(norm(show(i, 'Magasin'))));
-  const inLiv = i => ensOK(i) && inLiv0(i);
+  const inLiv = livInFn();
   $('#liv-scope').innerHTML = scopeBar('liv');
   // Raccourcis : seulement les jours (avec livraisons) de la semaine du jour affiché, du lundi au samedi
   const lundi = livDay - ((serialDate(livDay).getDay() + 6) % 7);
@@ -1562,6 +1669,7 @@ function renderLiv() {
   }).join('');
   $('#liv-list').innerHTML = html;
 }
+$('#liv-export').onclick = openLivExport;
 $('#liv-prev').onclick = () => { livDay--; livTour = livDefaultTour(); renderLiv(); };
 $('#liv-next').onclick = () => { livDay++; livTour = livDefaultTour(); renderLiv(); };
 $('#liv-input').addEventListener('change', e => { const v = e.target.value; if (!v) return; const [y, m, d] = v.split('-').map(Number); livDay = daySerial(new Date(y, m - 1, d)); livTour = livDefaultTour(); renderLiv(); });
